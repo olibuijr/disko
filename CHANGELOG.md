@@ -2,7 +2,11 @@
 
 All notable changes to Disko are recorded here. Versions follow Semantic Versioning.
 
-## [Unreleased]
+## [0.1.1] - 2026-10-16
+
+### Fixed
+
+- Refresh disk capacity during dashboard polling and refresh disk-picker labels when opened.
 
 ### Changed
 
@@ -34,3 +38,5 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
 - Virtual filesystems, `.snapshots` directories and index storage are excluded.
 
 [0.1.0]: https://github.com/olibuijr/disko/releases/tag/v0.1.0
+
+[0.1.1]: https://github.com/olibuijr/disko/releases/tag/v0.1.1

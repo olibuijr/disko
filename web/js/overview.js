@@ -7,10 +7,11 @@ export function overviewPage(container) {
   async function refresh() {
     const status = state.status;
     if (!status) return;
-    const [tree, activity, history] = await Promise.all([
-      api('tree', { id: 1, limit: 8 }), api('activity'), api('history'),
+    const [tree, activity, history, roots] = await Promise.all([
+      api('tree', { id: 1, limit: 8 }), api('activity'), api('history'), api('roots'),
     ]);
     if (!alive) return;
+    state.roots = roots;
     const now = Date.now() / 1000;
     const online = status.writer_alive && status.heartbeat_age_seconds < 30;
     const scanning = online && status.state === 'scanning';

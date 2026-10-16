@@ -1,5 +1,5 @@
 import { el, button, bytes, count, basename } from './dom.js';
-import { state, metric, navigate } from './api.js';
+import { api, state, metric, navigate } from './api.js';
 
 export function metricToggle(onChange) {
   const node = el('div', 'segmented');
@@ -56,7 +56,10 @@ export function rootDropdown(onChange) {
       }
     }
   };
-  trigger.addEventListener('click', () => {
+  trigger.addEventListener('click', async () => {
+    if (menu.hidden) state.roots = await api('roots').catch(() => state.roots);
+    state.root = [...state.roots.indexes, ...state.roots.disks].find(item => item.id === state.root.id && item.path === state.root.path && Boolean(item.capacity) === Boolean(state.root.capacity)) || state.root;
+    update();
     menu.hidden = !menu.hidden;
     trigger.setAttribute('aria-expanded', String(!menu.hidden));
     if (!menu.hidden) menu.querySelector('button')?.focus();
