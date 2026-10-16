@@ -6,7 +6,15 @@
 .breadcrumbs span { color: #4d6f50; }
 .tree-total { font-size: 12px; font-family: monospace; }
 .tree-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; align-items: stretch; }
-.treemap { position: relative; height: clamp(380px,55vh,680px); background: radial-gradient(120% 100% at 20% 0%, #0e1a11 0%, #0b130e 60%); margin: 6px; border-radius: 6px; overflow: hidden; min-width: 0; }
+.treemap { position: relative; height: clamp(380px,55vh,680px); background: radial-gradient(120% 100% at 20% 0%, #0e1a11 0%, #0b130e 60%); margin: 6px; border-radius: 6px; overflow: hidden; min-width: 0; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.treemap.panning { cursor: grabbing; }
+.treemap.panning .tree-tile { pointer-events: none; }
+.tree-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.zoom-bar { position: absolute; right: 10px; top: 10px; z-index: 5; display: flex; align-items: center; gap: 2px; background: rgb(9 14 11 / .85); border: 1px solid var(--line); border-radius: 8px; padding: 3px; backdrop-filter: blur(4px); }
+.zoom-btn { background: none; border: 0; color: #d4efd4; font-size: 14px; line-height: 1; min-width: 28px; height: 28px; border-radius: 6px; cursor: pointer; }
+.zoom-btn:hover:not(:disabled) { background: #1a2b1f; }
+.zoom-btn:disabled { opacity: .35; cursor: default; }
+.zoom-level { font-size: 10px; font-family: monospace; color: #8cac81; min-width: 42px; text-align: center; }
 .tree-rank { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; max-height: 720px; }
 .rank-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 16px 18px 10px; font-size: 12px; }
 .rank-head strong { font-size: 12px; letter-spacing: .2px; }
