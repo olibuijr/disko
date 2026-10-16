@@ -1,0 +1,33 @@
+.tree-card { padding: 0; overflow: hidden; }
+.tree-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--line); gap: 12px; }
+.breadcrumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 11px; min-width: 0; }
+.breadcrumbs button { background: none; border: 0; padding: 0; color: #98b48d; font-size: 11px; }
+.breadcrumbs button:last-child { color: var(--ink); font-weight: 550; }
+.breadcrumbs span { color: #4d6f50; }
+.tree-total { font-size: 12px; font-family: monospace; }
+.treemap { position: relative; height: clamp(380px,55vh,680px); background: #0b130e; margin: 6px; border-radius: 3px; overflow: hidden; }
+.tree-tile { position: absolute; color: #d4efd4; border: 2px solid #0b130e; border-radius: 3px; text-align: left; padding: 17px; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; transition: filter .15s; }
+.tree-tile:hover { filter: brightness(1.2); z-index: 2; box-shadow: inset 0 0 0 1px #a2f779; }
+.tree-tile:focus-visible { outline-offset: -5px; z-index: 3; }
+.tile-top { min-height: 0; }
+.tile-icon { font-size: 18px; opacity: .55; margin-bottom: 6px; display: block; }
+.tile-name { display: block; font-size: clamp(11px,1vw,15px); font-weight: 550; letter-spacing: -.2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-size { font-size: clamp(14px,1.5vw,23px); font-weight: 500; letter-spacing: -.6px; display: block; margin-top: 5px; }
+.tile-meta { font-size: 9px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree-tile.compact { padding: 9px; justify-content: flex-start; }
+.tree-tile.compact .tile-icon,.tree-tile.compact .tile-meta { display: none; }
+.tree-tile.compact .tile-size { font-size: 12px; margin-top: 2px; }
+.tree-tile.tiny { padding: 5px; border-width: 2px; border-radius: 3px; }
+.tree-tile.tiny .tile-name { font-size: 8px; }
+.tree-tile.tiny .tile-size,.tree-tile.tiny .tile-meta,.tree-tile.tiny .tile-icon { display: none; }
+.tree-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 15px 22px; font-size: 10px; color: #8cac81; border-top: 1px solid var(--line); }
+.tree-legend { display: flex; gap: 14px; }
+.tree-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.tree-legend i { width: 7px; height: 7px; border-radius: 3px; }
+.tree-info { margin-top: 18px; }
+.tree-info .card-head { margin-bottom: 16px; }
+.tree-info code { font-size: 10px; color: var(--muted); word-break: break-all; }
+.tree-note { font-size: 10px; color: #8cac81; padding: 14px 2px 0; }
+@media (max-width: 580px) { .dropdown { min-width: 220px; flex: 1; } .dropdown-menu { width: 290px; } .toolbar { gap: 12px; } .toolbar-group { flex-wrap: wrap; } .segmented button { padding-inline: 8px; font-size: 10px; } .tree-tile { padding: 10px; } .tree-header { padding: 14px; } .tree-total { font-size: 10px; } .details-grid { grid-template-columns: repeat(2,1fr); } .tree-foot { padding: 13px; } }
+
+.tree-info .card-head h2 { color: var(--lime); }

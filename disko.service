@@ -1,0 +1,27 @@
+[Unit]
+Description=Disko — live filesystem metadata and space index
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/disko watch / --listen 0.0.0.0:7331
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+StateDirectory=disko
+StateDirectoryMode=0750
+Group=@READER_GROUP@
+UMask=0027
+Nice=10
+CPUWeight=20
+IOWeight=20
+MemoryHigh=1G
+MemoryMax=2G
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/var/lib/disko /home /mnt -/media /tmp /var/tmp
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

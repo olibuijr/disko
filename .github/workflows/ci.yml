@@ -1,0 +1,23 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libsqlite3-dev
+      - name: Prepare Rust
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt && rustup default stable
+      - name: Build and test
+        run: ./build.sh --no-deps --test
+      - name: Rust formatting and warnings
+        run: cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings
+      - name: HTTP and deletion tests (temporary fixtures only)
+        run: python3 tests/web_api.py
+      - name: Structure and shell syntax
+        run: python3 tools/check_structure.py && bash -n build.sh install.sh
+      - name: JavaScript syntax
+        run: for source in web/js/*.js; do node --check "$source"; done

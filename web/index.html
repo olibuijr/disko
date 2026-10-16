@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090e0b">
+  <title>Disko · Filesystem console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%239bff79'/%3E%3Ccircle cx='32' cy='32' r='19' fill='none' stroke='%23090e0b' stroke-width='3'/%3E%3Cpath d='M13 32h38M32 13v38M18 20l28 24M18 44l28-24' stroke='%23090e0b' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles/base.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/tree.css">
+  <link rel="stylesheet" href="/styles/auth.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <section id="login-screen">
+    <form id="login-form" class="login-card">
+      <div class="brand"><span class="disco-ball" aria-hidden="true">[D]</span><span>DISKO<span class="brand-dot">_</span></span></div>
+      <h1>Sign in to your index</h1>
+      <p>View disk usage and manage files on this machine.</p>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required maxlength="1024">
+      <button type="submit" class="button">Sign in →</button>
+      <p id="login-error" role="alert"></p>
+    </form>
+  </section>
+  <aside class="sidebar">
+    <a class="brand" href="#overview" aria-label="Disko home"><span class="disco-ball" aria-hidden="true">[D]</span><span>DISKO<span class="brand-dot">_</span></span></a>
+    <div class="sidebar-label">FILESYSTEM // INDEX</div>
+    <nav aria-label="Main navigation">
+      <a href="#overview" data-page="overview"><span class="nav-icon">◫</span>Overview</a>
+      <a href="#tree" data-page="tree"><span class="nav-icon">▦</span>Disk Tree<span class="nav-new">MAP</span></a>
+      <a href="#explorer" data-page="explorer"><span class="nav-icon">⌕</span>Space explorer</a>
+      <a href="#history" data-page="history"><span class="nav-icon">◷</span>History</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="local-card"><span class="dot"></span><div>Authenticated<small>LAN control session.</small></div></div>
+      <div class="sidebar-footer"><span id="version">Disko</span><a href="https://github.com/olibuijr/disko" target="_blank" rel="noreferrer">GitHub ↗</a></div>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span class="eyebrow">DISKO CONTROL <span class="top-separator">/</span> FS INDEX</span><div class="topbar-right"><span id="connection" class="live-pill"><span class="dot"></span>Connecting</span><span id="clock" class="clock"></span><button id="logout" type="button">Sign out</button></div></header>
+    <main id="main" tabindex="-1">
+      <div id="error" class="notice error" role="alert" hidden></div>
+      <div class="page-heading"><div><div class="eyebrow" id="page-eyebrow">A LITTLE CLARITY</div><h1 id="page-title">Filesystem overview</h1><p id="page-subtitle">See where your bytes live, and what’s moving.</p></div><button id="rescan" class="button secondary"><span aria-hidden="true">↻</span> Reconcile index</button></div>
+      <div id="page" aria-live="polite"><div class="empty">Loading the index…</div></div>
+    </main>
+    <footer class="page-footer"><span><span class="dot small"></span> Filesystem metadata · updated locally</span><span id="last-updated">Waiting for the index</span></footer>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

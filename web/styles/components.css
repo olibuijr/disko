@@ -1,0 +1,45 @@
+.toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.toolbar-group { display: flex; align-items: center; gap: 10px; }
+.segmented { display: inline-flex; padding: 4px; border-radius: 3px; border: 1px solid var(--line); background: #0c130e; gap: 3px; }
+.segmented button { padding: 6px 12px; border: 0; background: transparent; border-radius: 3px; font-size: 11px; color: #8aa57f; }
+.segmented button.active { background: #101813; color: var(--ink); box-shadow: 0 1px 3px #0001; }
+.dropdown { position: relative; min-width: 260px; }
+.dropdown-trigger { width: 100%; border: 1px solid var(--line); background: #101813; border-radius: 3px; padding: 9px 12px; display: flex; align-items: center; gap: 12px; text-align: left; }
+.drive-icon { width: 32px; height: 32px; background: #20351f; border-radius: 3px; display: grid; place-items: center; color: #a8d78b; font-size: 19px; }
+.dropdown-copy { flex: 1; }
+.dropdown-copy strong { display: block; font-size: 11px; font-weight: 550; }
+.dropdown-copy small { display: block; font-size: 9px; margin-top: 1px; }
+.dropdown-chevron { font-size: 12px; color: #83a47f; }
+.dropdown-menu { position: absolute; inset: calc(100% + 6px) auto auto 0; width: 320px; padding: 7px; background: #101813; border: 1px solid var(--line); border-radius: 3px; box-shadow: 0 14px 40px #0008; z-index: 15; max-height: 400px; overflow: auto; }
+.dropdown-section { padding: 10px 9px 5px; color: #89a280; letter-spacing: 1px; font-size: 8px; font-weight: 600; }
+.dropdown-option { width: 100%; border: 0; border-radius: 3px; background: none; padding: 9px; display: flex; align-items: center; gap: 11px; text-align: left; }
+.dropdown-option:hover,.dropdown-option[aria-selected=true] { background: #213820; }
+.dropdown-option .check { color: #72934b; font-size: 12px; }
+.search-box { display: flex; align-items: center; gap: 9px; background: #101813; border: 1px solid var(--line); border-radius: 3px; padding: 10px 13px; flex: 1; max-width: 400px; color: #88a280; }
+.search-box input { width: 100%; border: 0; outline: 0; background: transparent; font-size: 12px; color: var(--ink); }
+.search-box:focus-within { outline: 2px solid #a2f779; }
+.table-wrap { overflow: auto; border-radius: 3px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+th { font-size: 9px; font-weight: 500; color: #92a789; letter-spacing: .6px; border-bottom: 1px solid var(--line); padding: 12px 14px; background: #0c150f; white-space: nowrap; }
+td { padding: 13px 14px; border-bottom: 1px solid #213423; vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: #15251a; }
+.path-cell { max-width: 460px; }
+.path-cell button { display: block; background: none; border: 0; text-align: left; width: 100%; padding: 0; color: var(--ink); }
+.path-cell strong { font-weight: 500; font-size: 12px; display: block; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.path-cell small { display: block; font-size: 9px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; margin-top: 3px; }
+.row-size { font-family: monospace; white-space: nowrap; font-size: 11px; }
+.row-bar { width: 90px; height: 4px; background: #0c130e; border-radius: 3px; overflow: hidden; margin-top: 7px; }
+.row-bar span { display: block; height: 100%; background: #83c266; }
+.chart { width: 100%; height: 140px; display: block; overflow: visible; }
+.chart-grid { stroke: #223a28; stroke-width: 1; }
+.chart-fill { fill: #19351d; }
+.chart-line { stroke: #a2f779; fill: none; stroke-width: 2; stroke-linejoin: round; }
+.chart-labels { display: flex; justify-content: space-between; font-size: 9px; color: #809a7c; margin-top: 6px; }
+.history-chart { margin-bottom: 22px; }
+.history-summary { display: flex; gap: 24px; margin-bottom: 22px; }
+.history-summary strong { font-size: 23px; display: block; font-weight: 500; letter-spacing: -.6px; }
+.history-summary label { font-size: 10px; color: var(--muted); }
+.details-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+.details-grid label { display: block; font-size: 9px; color: var(--muted); margin-bottom: 4px; }
+.details-grid strong { display: block; font-size: 12px; font-weight: 500; word-break: break-all; }
