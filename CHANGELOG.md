@@ -2,6 +2,12 @@
 
 All notable changes to Disko are recorded here. Versions follow Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- Pin CI to Ubuntu 24.04 and a Node 24 checkout action to remove runner deprecation warnings.
+
 ## [0.1.0] - 2026-10-16
 
 ### Added
