@@ -1,5 +1,7 @@
+mod btrfs;
 mod decode;
 mod mounts;
+mod resolve;
 use crate::mounts::Mount;
 use anyhow::{Result, bail};
 use std::{

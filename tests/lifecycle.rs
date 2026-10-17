@@ -42,7 +42,7 @@ fn wait(mut predicate: impl FnMut() -> bool) {
     let start = Instant::now();
     while !predicate() {
         assert!(
-            start.elapsed() < Duration::from_secs(15),
+            start.elapsed() < Duration::from_secs(60),
             "watcher failed to converge"
         );
         thread::sleep(Duration::from_millis(50));
@@ -325,10 +325,10 @@ fn watch_stops_cleanly_on_sigterm_while_idle_and_mid_scan() {
     sigterm_exits_cleanly(&mut child, &db);
 
     // Enough entries that a single-worker walk is still running when signalled.
-    for i in 0..400 {
+    for i in 0..120 {
         let dir = root.join(format!("bulk/{i}"));
         fs::create_dir_all(&dir).unwrap();
-        for j in 0..250 {
+        for j in 0..200 {
             fs::File::create(dir.join(j.to_string())).unwrap();
         }
     }

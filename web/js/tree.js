@@ -29,9 +29,7 @@ export function treePage(container) {
   const crumbs = el('div', 'breadcrumbs');
   crumbs.setAttribute('aria-label', 'Folder breadcrumbs');
   const total = el('span', 'tree-total');
-  const headerRight = el('div', 'tree-header-right');
-  headerRight.append(total);
-  header.append(crumbs, headerRight);
+  const headerRight = el('div', 'tree-header-right'); headerRight.append(total); header.append(crumbs, headerRight);
   const body = el('div', 'tree-body');
   const map = el('div', 'treemap');
   map.setAttribute('role', 'group');
