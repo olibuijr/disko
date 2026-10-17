@@ -68,6 +68,6 @@ pub(super) fn prepare(cli: &Cli, s: &ScanArgs) -> Result<(Index, std::fs::File, 
         "UPDATE scans SET finished=?1,state='interrupted' WHERE finished IS NULL",
         [now()],
     )?;
-    let idx = Index::new(c, roots, excludes, stop.clone())?;
+    let idx = Index::new(c, roots, excludes, stop.clone(), s.jobs)?;
     Ok((idx, lock, db))
 }

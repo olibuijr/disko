@@ -24,74 +24,97 @@ impl Index {
         if !recursive || !metadata.is_dir() {
             return Ok(());
         }
-        let mut stack = vec![(p.to_owned(), id)];
-        while let Some((path, parent)) = stack.pop() {
-            self.current_path = path.clone();
+        self.sweep(p, id)
+    }
+
+    fn sweep(&mut self, p: &Path, root: i64) -> Result<()> {
+        self.watch_dir(p);
+        let mut pool = pool::Pool::start(
+            self.stop.clone(),
+            self.filter.clone(),
+            self.jobs,
+            walk::Job {
+                path: p.to_owned(),
+                id: root,
+                seen: self.next_seen(),
+                place: walk::Place::Regular,
+            },
+        )?;
+        let mut in_flight = 1usize;
+        while in_flight > 0 {
+            let Some(result) = pool.receive() else {
+                bail!("scan workers stopped unexpectedly");
+            };
+            in_flight -= 1;
             if self.stop.load(std::sync::atomic::Ordering::Relaxed) {
                 bail!("interrupted; completed batches are saved");
             }
-            self.watch_dir(&path); // Install before enumeration to close the scan/watch gap.
-            let rd = match fs::read_dir(&path) {
-                Ok(rd) => rd,
-                Err(e) => {
-                    self.error(&path, &e);
-                    continue;
-                }
-            };
-            self.generation += 1;
-            let generation = self.generation;
-            let mut complete = true;
-            for entry in rd {
-                let entry = match entry {
-                    Ok(v) => v,
-                    Err(e) => {
-                        self.error(&path, &e);
-                        complete = false;
-                        continue;
-                    }
-                };
-                let child = entry.path();
-                if self.excluded(&child) {
-                    continue;
-                }
-                match fs::symlink_metadata(&child) {
-                    Ok(m) => {
-                        let id = self.upsert(parent, &entry.file_name(), &m, generation)?;
-                        if m.is_dir() {
-                            stack.push((child, id));
-                        }
-                    }
-                    Err(e) => {
-                        // Preserve old information on permission/race errors; never infer deletion.
-                        self.c
-                            .prepare_cached("UPDATE nodes SET seen=?3 WHERE parent=?1 AND name=?2")?
-                            .execute(params![parent, entry.file_name().as_bytes(), generation])?;
-                        self.error(&child, &e);
-                    }
-                }
-            }
-            if path == Path::new("/") {
-                stack.sort_by_key(|(p, _)| match p.to_str() {
-                    Some("/home") => 10,
-                    Some("/var") => 9,
-                    Some("/usr") => 8,
-                    Some("/tmp") => 7,
-                    Some("/mnt") => -10,
-                    _ => 0,
-                });
-            }
-            if complete {
-                let stale = self
-                    .c
-                    .prepare_cached("SELECT id FROM nodes WHERE parent=?1 AND seen!=?2")?
-                    .query_map(params![parent, generation], |r| r.get::<_, i64>(0))?
-                    .collect::<rusqlite::Result<Vec<_>>>()?;
-                for id in stale {
-                    self.remove(id)?;
-                }
-            }
+            self.current_path = result.path.clone();
+            in_flight += self.absorb(&mut pool, result)?;
         }
         Ok(())
+    }
+
+    /// Replay one enumerated directory: upsert children, enqueue new directories
+    /// for the walk, then prune entries that disappeared since that generation.
+    fn absorb(&mut self, pool: &mut pool::Pool, r: walk::DirResult) -> Result<usize> {
+        let walk::DirResult {
+            path,
+            id,
+            seen,
+            place: inherited,
+            complete,
+            children,
+            read_failed,
+            entry_failed,
+            stat_failed,
+        } = r;
+        let mut queued = 0usize;
+        let root = path == Path::new("/");
+        if let Some(e) = read_failed {
+            self.error(&path, &e);
+        }
+        for e in entry_failed {
+            self.error(&path, &e);
+        }
+        for (name, e) in stat_failed {
+            self.c
+                .prepare_cached("UPDATE nodes SET seen=?3 WHERE parent=?1 AND name=?2")?
+                .execute(params![id, name.as_bytes(), seen])?;
+            self.error(&path.join(&name), &e);
+        }
+        for (name, m) in children {
+            let child = path.join(&name);
+            let node = self.upsert(id, &name, &m, seen)?;
+            if !m.is_dir() {
+                continue;
+            }
+            let place = place_for(inherited, root, &name);
+            self.watch_dir(&child);
+            pool.dispatch(walk::Job {
+                path: child,
+                id: node,
+                seen: self.next_seen(),
+                place,
+            });
+            queued += 1;
+        }
+        if complete {
+            let stale = self
+                .c
+                .prepare_cached("SELECT id FROM nodes WHERE parent=?1 AND seen!=?2")?
+                .query_map(params![id, seen], |row| row.get::<_, i64>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            for node in stale {
+                self.remove(node)?;
+            }
+        }
+        Ok(queued)
+    }
+
+    fn next_seen(&mut self) -> i64 {
+        self.generation += 1;
+        self.generation
     }
 
     pub fn reconcile(&mut self) -> Result<()> {
@@ -115,7 +138,7 @@ impl Index {
         set_meta(&self.c, "scan_start_visited", start_visited)?;
         set_meta(&self.c, "state", "scanning")?;
         self.commit()?;
-        let start = Instant::now();
+        let start_time = Instant::now();
         for root in self.roots.clone() {
             self.sync(&root, true)?;
         }
@@ -125,7 +148,11 @@ impl Index {
             "DELETE FROM scans WHERE id NOT IN (SELECT id FROM scans ORDER BY id DESC LIMIT 100)",
             [],
         )?;
-        set_meta(&self.c, "last_scan_seconds", start.elapsed().as_secs_f64())?;
+        set_meta(
+            &self.c,
+            "last_scan_seconds",
+            start_time.elapsed().as_secs_f64(),
+        )?;
         set_meta(
             &self.c,
             "state",
@@ -139,10 +166,25 @@ impl Index {
         eprintln!(
             "indexed {} entries in {:.2}s; {} metadata errors, {} watch errors",
             self.visited,
-            start.elapsed().as_secs_f64(),
+            start_time.elapsed().as_secs_f64(),
             self.errors,
             self.watch_errors
         );
         Ok(())
+    }
+}
+
+/// Keep the former root-first priority: home and var before the rest, /mnt last.
+fn place_for(inherited: walk::Place, root: bool, name: &OsStr) -> walk::Place {
+    if matches!(inherited, walk::Place::Tail) {
+        return walk::Place::Tail;
+    }
+    if !root {
+        return walk::Place::Regular;
+    }
+    match name.as_bytes() {
+        b"home" | b"var" | b"usr" | b"tmp" => walk::Place::Front,
+        b"mnt" => walk::Place::Tail,
+        _ => walk::Place::Regular,
     }
 }

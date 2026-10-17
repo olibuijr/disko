@@ -16,8 +16,10 @@ use std::{
 mod commit;
 mod db;
 mod paths;
+mod pool;
 mod scan;
 mod updates;
+mod walk;
 pub use db::{now, open, set_meta};
 pub use paths::{absolute, path_of, resolve};
 
@@ -48,6 +50,8 @@ pub struct Index {
     pub watched: HashSet<PathBuf>,
     pub excludes: Vec<PathBuf>,
     pub roots: Vec<PathBuf>,
+    filter: std::sync::Arc<walk::Filter>,
+    jobs: u32,
     pub watcher: Option<RecommendedWatcher>,
     pub filesystem_devices: HashSet<u64>,
     last_commit: Instant,
@@ -63,8 +67,10 @@ impl Index {
         roots: Vec<PathBuf>,
         excludes: Vec<PathBuf>,
         stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        jobs: u32,
     ) -> Result<Self> {
         c.execute_batch("BEGIN IMMEDIATE")?;
+        let filter = std::sync::Arc::new(walk::Filter::new(excludes.clone()));
         Ok(Self {
             c,
             parents: HashMap::new(),
@@ -76,6 +82,8 @@ impl Index {
             watched: HashSet::new(),
             excludes,
             roots,
+            filter,
+            jobs,
             watcher: None,
             filesystem_devices: HashSet::new(),
             last_commit: Instant::now(),
@@ -87,9 +95,7 @@ impl Index {
     }
 
     pub fn excluded(&self, p: &Path) -> bool {
-        self.excludes.iter().any(|e| p.starts_with(e))
-            || p.components()
-                .any(|x| x.as_os_str() == OsStr::new(".snapshots"))
+        self.filter.excluded(p)
     }
 
     pub fn relevant(&self, p: &Path) -> bool {

@@ -90,6 +90,9 @@ pub struct ScanArgs {
     /// Additional absolute subtrees to omit. Virtual filesystems and snapshots are always omitted.
     #[arg(long)]
     pub exclude: Vec<PathBuf>,
+    /// Parallel directory workers; 0 picks one per core up to 16.
+    #[arg(long, default_value_t = 0)]
+    pub jobs: u32,
 }
 #[derive(Clone, Copy, ValueEnum)]
 pub enum Kind {
