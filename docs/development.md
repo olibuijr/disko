@@ -57,7 +57,9 @@ sudo env DISKO_BIN="$PWD/target/debug/disko" python3 tests/fanotify_linux.py
 This creates a sparse ext4 image under `/tmp`, mounts it below `/tmp`, checks
 fanotify events and deletion there, and unmounts it on exit. It needs root, loop
 mount support and e2fsprogs. It does not operate on an existing disk's files.
-Btrfs subvolumes may use the inotify fallback instead of filesystem marks.
+Btrfs is covered through a detached top-level mount, which this ext4 fixture
+does not exercise; check it by running `disko watch` as root on a scratch tree
+below a Btrfs subvolume and confirming `watch_backend` and zero `watch_errors`.
 
 ## Releases
 

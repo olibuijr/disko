@@ -26,7 +26,7 @@ pub fn open(path: &Path, write: bool) -> Result<Connection> {
     c.execute_batch("PRAGMA cache_size=-32768; PRAGMA temp_store=MEMORY;")?;
     c.set_prepared_statement_cache_capacity(64);
     if write {
-        c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=4096;
+        c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=4096; PRAGMA journal_size_limit=67108864;
         CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS nodes(
           id INTEGER PRIMARY KEY, parent INTEGER NOT NULL, name BLOB NOT NULL,

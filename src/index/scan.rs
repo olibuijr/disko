@@ -28,7 +28,7 @@ impl Index {
     }
 
     fn sweep(&mut self, p: &Path, root: i64) -> Result<()> {
-        self.watch_dir(p);
+        self.watch_dir(p, None);
         let mut pool = pool::Pool::start(
             self.stop.clone(),
             self.filter.clone(),
@@ -42,9 +42,7 @@ impl Index {
         )?;
         let mut in_flight = 1usize;
         while in_flight > 0 {
-            let Some(result) = pool.receive() else {
-                bail!("scan workers stopped unexpectedly");
-            };
+            let result = pool.receive()?;
             in_flight -= 1;
             if self.stop.load(std::sync::atomic::Ordering::Relaxed) {
                 bail!("interrupted; completed batches are saved");
@@ -90,7 +88,7 @@ impl Index {
                 continue;
             }
             let place = place_for(inherited, root, &name);
-            self.watch_dir(&child);
+            self.watch_dir(&child, Some(&m));
             pool.dispatch(walk::Job {
                 path: child,
                 id: node,
@@ -162,7 +160,7 @@ impl Index {
                 "idle"
             },
         )?;
-        self.commit()?;
+        self.checkpoint()?;
         eprintln!(
             "indexed {} entries in {:.2}s; {} metadata errors, {} watch errors",
             self.visited,

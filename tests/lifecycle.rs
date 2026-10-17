@@ -193,3 +193,147 @@ fn directory_replaced_by_file_and_sql_cannot_write() {
         .unwrap();
     assert!(!out.status.success());
 }
+
+fn scan_jobs(db: &Path, root: &Path, jobs: u32) {
+    let out = Command::new(env!("CARGO_BIN_EXE_disko"))
+        .arg("--db")
+        .arg(db)
+        .arg("scan")
+        .arg(root)
+        .arg("--jobs")
+        .arg(jobs.to_string())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Every node with its subtree totals, independent of row IDs and walk order.
+fn snapshot(db: &Path) -> Vec<String> {
+    let out = Command::new(env!("CARGO_BIN_EXE_disko"))
+        .arg("--db")
+        .arg(db)
+        .args([
+            "sql",
+            "SELECT CAST(name AS TEXT) AS n,kind,size,bytes,files,entries,
+             (SELECT CAST(name AS TEXT) FROM nodes p WHERE p.id=nodes.parent) AS parent
+             FROM nodes",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let mut rows: Vec<_> = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert!(rows.len() > 300, "{} rows", rows.len());
+    rows.sort();
+    rows
+}
+
+#[test]
+fn parallel_and_serial_walks_agree_including_pruning() {
+    let (_t, root, db) = setup();
+    for i in 0..12 {
+        for j in 0..6 {
+            let dir = root.join(format!("d{i}/e{j}"));
+            fs::create_dir_all(&dir).unwrap();
+            for k in 0..4 {
+                fs::write(dir.join(format!("f{k}")), vec![1; i * 100 + j * 10 + k]).unwrap();
+            }
+        }
+    }
+    let mut deep = root.join("deep");
+    for level in 0..40 {
+        deep = deep.join(format!("l{level}"));
+    }
+    fs::create_dir_all(&deep).unwrap();
+    fs::write(deep.join("leaf"), [1; 77]).unwrap();
+    let serial = db.with_file_name("serial.db");
+    scan_jobs(&serial, &root, 1);
+    scan_jobs(&db, &root, 8);
+    assert_eq!(snapshot(&serial), snapshot(&db));
+
+    fs::remove_dir_all(root.join("d3")).unwrap();
+    fs::remove_dir_all(root.join("deep/l0/l1/l2")).unwrap();
+    fs::write(root.join("d5/e2/f0"), [1; 9999]).unwrap();
+    fs::create_dir_all(root.join("d7/new/inner")).unwrap();
+    fs::write(root.join("d7/new/inner/x"), [1; 5]).unwrap();
+    scan_jobs(&db, &root, 8);
+    let fresh = db.with_file_name("fresh.db");
+    scan_jobs(&fresh, &root, 1);
+    assert_eq!(snapshot(&fresh), snapshot(&db));
+    let info = run(&db, &["info", root.to_str().unwrap()]);
+    assert_eq!(info["files"], 11 * 6 * 4 + 1);
+}
+
+fn sigterm_exits_cleanly(child: &mut Child, db: &Path) {
+    let killed = Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(killed.success());
+    let start = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(15),
+            "daemon did not stop"
+        );
+        thread::sleep(Duration::from_millis(50));
+    };
+    assert!(status.success(), "SIGTERM exit status: {status}");
+    assert_eq!(run(db, &["status"])["state"], "stopped");
+}
+
+fn spawn_watch(db: &Path, root: &Path, jobs: &str) -> Child {
+    Command::new(env!("CARGO_BIN_EXE_disko"))
+        .arg("--db")
+        .arg(db)
+        .arg("watch")
+        .arg("--no-web")
+        .arg(root)
+        .args(["--jobs", jobs])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap()
+}
+
+fn state(db: &Path) -> String {
+    Command::new(env!("CARGO_BIN_EXE_disko"))
+        .arg("--db")
+        .arg(db)
+        .arg("status")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default()
+}
+
+#[test]
+fn watch_stops_cleanly_on_sigterm_while_idle_and_mid_scan() {
+    let (_t, root, db) = setup();
+    fs::write(root.join("a"), [1; 10]).unwrap();
+    let mut child = spawn_watch(&db, &root, "0");
+    wait(|| db.exists() && state(&db).contains("\"watching\""));
+    sigterm_exits_cleanly(&mut child, &db);
+
+    // Enough entries that a single-worker walk is still running when signalled.
+    for i in 0..400 {
+        let dir = root.join(format!("bulk/{i}"));
+        fs::create_dir_all(&dir).unwrap();
+        for j in 0..250 {
+            fs::File::create(dir.join(j.to_string())).unwrap();
+        }
+    }
+    let fresh = db.with_file_name("mid-scan.db");
+    let mut child = spawn_watch(&fresh, &root, "1");
+    wait(|| fresh.exists() && state(&fresh).contains("\"scanning\""));
+    sigterm_exits_cleanly(&mut child, &fresh);
+}

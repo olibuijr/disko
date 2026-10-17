@@ -36,9 +36,14 @@ filesystems. A bounded reader decodes directory file handles and entry names,
 resolves them through open mount descriptors, and queues metadata changes.
 This avoids one inotify watch per directory on large supported filesystems.
 
-Btrfs subvolumes can reject filesystem marks with `EXDEV`; unsupported or
-unprivileged paths use inotify directory watches. Watches are installed before
-enumeration. Access/read events are ignored, while write-close events are retained.
+Btrfs rejects filesystem marks on subvolumes other than the top level (`EXDEV`).
+Disko then marks the whole Btrfs filesystem through a private, read-only,
+detached mount of the top-level subvolume (`fsopen`/`fsmount`); nothing is
+attached to the mount tree, and the mount disappears with the daemon. Event
+handles are decoded on that mount and translated to real paths through each
+subvolume's mountpoint in `/proc/self/mountinfo`. Nested subvolumes (inode 256,
+not a mount root) count as covered. Unsupported or unprivileged paths use
+inotify directory watches, installed before enumeration. Access/read events are ignored, while write-close events are retained.
 A dedicated collector keeps draining events during full scans and coalesces
 repeated writes by path. The event channel and pending-path map are each bounded
 at 65,536 entries. Live updates use a 250 ms coalescing window.

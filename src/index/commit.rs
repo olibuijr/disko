@@ -59,6 +59,19 @@ impl Index {
         Ok(())
     }
 
+    /// Fold the WAL back into the database after a scan. A passive autocheckpoint
+    /// never shrinks the file; with journal_size_limit a completed TRUNCATE does.
+    /// Best effort: a busy or failed checkpoint must not stop the daemon.
+    pub fn checkpoint(&mut self) -> Result<()> {
+        self.commit()?;
+        self.c.execute_batch("COMMIT")?;
+        let _ = self
+            .c
+            .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()));
+        self.c.execute_batch("BEGIN IMMEDIATE")?;
+        Ok(())
+    }
+
     pub(super) fn maybe_commit(&mut self) -> Result<()> {
         if self.dirty >= 4096 || self.last_commit.elapsed() > Duration::from_secs(2) {
             self.commit()?;

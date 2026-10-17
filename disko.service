@@ -7,6 +7,9 @@ Type=simple
 ExecStart=/usr/local/bin/disko watch / --listen 0.0.0.0:7331
 Restart=on-failure
 RestartSec=5
+# A failing daemon (for example a full disk) would otherwise rescan every 5s.
+RestartSteps=8
+RestartMaxDelaySec=30min
 TimeoutStopSec=30
 StateDirectory=disko
 StateDirectoryMode=0750

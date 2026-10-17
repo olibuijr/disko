@@ -36,6 +36,23 @@ pub struct WatchOptions {
 
 pub fn writer(cli: &Cli, s: &ScanArgs, watch: Option<WatchOptions>) -> Result<()> {
     let (mut idx, _lock, db) = config::prepare(cli, s)?;
+    let daemon = watch.is_some();
+    let result = run(&mut idx, db, watch);
+    // SIGTERM/SIGINT abort a running scan through an error. For the daemon that
+    // is an orderly stop (completed batches are committed when `idx` drops), so
+    // systemd should not record it as a failure. One-shot `scan` still fails.
+    match result {
+        Err(e) if daemon && idx.stop.load(Ordering::Relaxed) => {
+            eprintln!("disko: stopped ({e:#})");
+            set_meta(&idx.c, "state", "stopped")?;
+            set_meta(&idx.c, "pid", 0)?;
+            Ok(())
+        }
+        other => other,
+    }
+}
+
+fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> {
     let stop = idx.stop.clone();
     let rescan = Arc::new(AtomicBool::new(false));
     if let Some(options) = watch.as_ref().and_then(|w| w.web.as_ref()) {
