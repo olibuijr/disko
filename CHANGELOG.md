@@ -2,6 +2,51 @@
 
 All notable changes to Disko are recorded here. Versions follow Semantic Versioning.
 
+## [0.3.0] - 2026-10-17
+
+### Added
+
+- Cleanup page and `disko cleanup`: the largest build-output, package and cache
+  folders (Cargo `target/` and anything with `CACHEDIR.TAG`, `node_modules`,
+  Python environments and caches, and more), outermost first, with delete.
+  On a busy disk the query can take minutes, so the dashboard computes it in
+  the background and serves it from memory.
+- "Grew this week" on the overview and `disko grew`: a daily record of folders
+  of 1 GiB or more, reported as the deepest folder that explains the growth.
+- The dashboard warns while the password is still the old default `disko`.
+- An interrupted full scan resumes after a restart instead of starting over. Its
+  pending folders are kept in `scan_queue`, written in the same transactions as
+  the entries, so the saved frontier is exact.
+
+### Changed
+
+- Rescans write only new and changed entries. Pruning compares each folder's
+  indexed names with what was read, replacing per-row `seen` stamps. A rescan
+  of `/usr` (400k entries) went from 201 s and 1,193 MiB written to 6.6 s and
+  nothing written.
+- The installer generates a random dashboard password instead of `disko`.
+- Directory walkers default to at most 4; the single writer is the limit.
+- The kernel fanotify queue is unbounded where permitted, so bursts do not
+  overflow into a full rescan.
+- Scans commit every 15 s or 32k changes instead of every 2 s or 4k, and fold
+  the WAL back every 64 MiB instead of 16 MiB, so hot pages are written once
+  per batch. On titan disko went from ~130 write IOPS to under one.
+- The service yields to everything else: idle CPU and I/O scheduling, `Nice=19`,
+  and first in line for the OOM killer.
+- The installer marks `/var/lib/disko` no-copy-on-write and rewrites an existing
+  index once. On a Btrfs root the 4 GiB index had fragmented into 845,085
+  extents; rewritten it has 1,604.
+
+### Fixed
+
+- Dashboard refreshes no longer drop keyboard focus, re-render unchanged data,
+  or re-announce the whole page to screen readers every three seconds.
+- A daemon busy in a slow disk sync showed as "not running"; liveness now comes
+  from the process, and a late heartbeat reads as busy.
+- One unreadable entry (a file vanishing mid-scan) no longer raises a warning;
+  the banner starts at 50.
+- The overview fetches scan history every 30 seconds instead of every 3.
+
 ## [0.2.0] - 2026-10-17
 
 ### Added
@@ -105,3 +150,5 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
 [0.1.2]: https://github.com/olibuijr/disko/releases/tag/v0.1.2
 
 [0.2.0]: https://github.com/olibuijr/disko/releases/tag/v0.2.0
+
+[0.3.0]: https://github.com/olibuijr/disko/releases/tag/v0.3.0

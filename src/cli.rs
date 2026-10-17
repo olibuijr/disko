@@ -80,6 +80,19 @@ pub enum Command {
     },
     /// Coverage, watcher health, freshness, and cached filesystem totals.
     Status,
+    /// Largest build-output, package and cache folders that tools can recreate.
+    Cleanup {
+        #[arg(short = 'n', long, default_value_t = 25)]
+        limit: usize,
+        /// Smallest folder to list, in MiB.
+        #[arg(long, default_value_t = 64)]
+        min_mib: i64,
+    },
+    /// Large folders that grew most, from the daemon's daily size record.
+    Grew {
+        #[arg(long, default_value_t = 7)]
+        days: i64,
+    },
     /// Run a read-only SQL query; useful for custom filesystem analysis.
     Sql { query: String },
 }
@@ -90,7 +103,7 @@ pub struct ScanArgs {
     /// Additional absolute subtrees to omit. Virtual filesystems and snapshots are always omitted.
     #[arg(long)]
     pub exclude: Vec<PathBuf>,
-    /// Parallel directory workers; 0 picks one per core up to 16.
+    /// Parallel directory workers; 0 picks one per core up to 4 (the writer is the limit).
     #[arg(long, default_value_t = 0)]
     pub jobs: u32,
 }

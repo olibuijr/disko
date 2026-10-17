@@ -15,9 +15,13 @@ StateDirectory=disko
 StateDirectoryMode=0750
 Group=@READER_GROUP@
 UMask=0027
-Nice=10
-CPUWeight=20
-IOWeight=20
+# A background indexer: yield CPU and disk to every other process.
+Nice=19
+CPUSchedulingPolicy=idle
+CPUWeight=idle
+IOSchedulingClass=idle
+IOWeight=1
+OOMScoreAdjust=1000
 MemoryHigh=1G
 MemoryMax=2G
 NoNewPrivileges=true

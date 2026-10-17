@@ -183,6 +183,9 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
             idx.commit()?;
         }
         if last_health.elapsed() > Duration::from_secs(10) {
+            if !due {
+                idx.record_growth()?;
+            }
             idx.commit()?;
             last_health = Instant::now();
         }

@@ -28,6 +28,8 @@ pub(super) fn get(route: &str) -> Option<Reply> {
         "/js/history.js" => asset!("text/javascript", "js/history.js"),
         "/js/delete.js" => asset!("text/javascript", "js/delete.js"),
         "/js/login.js" => asset!("text/javascript", "js/login.js"),
+        "/js/cards.js" => asset!("text/javascript", "js/cards.js"),
+        "/js/cleanup.js" => asset!("text/javascript", "js/cleanup.js"),
         _ => None,
     }
 }

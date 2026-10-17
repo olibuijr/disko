@@ -1,15 +1,17 @@
-import { api, state } from './api.js';
+import { api, state, liveness } from './api.js';
 import { toast, count, ago } from './dom.js';
 import { overviewPage } from './overview.js';
 import { treePage } from './tree.js';
 import { explorerPage } from './explorer.js';
 import { historyPage } from './history.js';
+import { cleanupPage } from './cleanup.js';
 import { showLogin } from './login.js';
 
 const pages = {
   overview: { title: 'Overview', subtitle: 'How space is used on each disk, and what the index is doing.', render: overviewPage },
   tree: { title: 'Disk tree', subtitle: 'Every box is sized by the space it uses. Open folders to find what is large.', render: treePage },
   explorer: { title: 'Explorer', subtitle: 'The largest files and folders, or search by name.', render: explorerPage },
+  cleanup: { title: 'Cleanup', subtitle: 'Build output, package folders and caches you can delete safely.', render: cleanupPage },
   history: { title: 'History', subtitle: 'Past scans and how fast the index was built.', render: historyPage },
 };
 let current = null, busy = false, polling = null;
@@ -34,21 +36,28 @@ async function poll() {
     state.status = await api('status');
     const status = state.status;
     const connected = document.querySelector('#connection');
-    const healthy = status.writer_alive && status.heartbeat_age_seconds < 30;
-    const scanning = healthy && status.state === 'scanning';
-    connected.classList.toggle('offline', !healthy);
-    connected.classList.toggle('scanning', scanning);
-    connected.lastChild.textContent = !healthy ? 'Daemon not running'
-      : scanning ? 'Scanning'
+    const live = liveness(status);
+    connected.classList.toggle('offline', !live.alive);
+    connected.classList.toggle('scanning', live.scanning);
+    connected.lastChild.textContent = !live.alive ? 'Daemon not running'
+      : live.late ? `Busy, no update for ${status.heartbeat_age_seconds}s`
+      : live.scanning ? 'Scanning'
       : status.state === 'waiting for disk space' ? 'Scan waiting for disk space'
       : 'Up to date';
-    document.querySelector('#last-updated').textContent = healthy ? '' : `Last heard from ${ago(status.heartbeat)}`;
+    document.querySelector('#last-updated').textContent = live.alive ? '' : `Last heard from ${ago(status.heartbeat)}`;
     const notice = document.querySelector('#error');
     const problems = [];
     if (status.watch_errors) problems.push(`${count(status.watch_errors)} folders can't be watched for changes; they refresh on the next scan.`);
-    if (status.metadata_errors) problems.push(`${count(status.metadata_errors)} entries couldn't be read (often permissions); the daemon log lists them.`);
+    if (state.session.default_password) problems.push('The dashboard still uses the default password. Anyone on your network can sign in; set a new one with: sudo disko password');
+    // A handful of unreadable entries is normal (files vanish mid-scan).
+    if (status.metadata_errors >= 50) problems.push(`${count(status.metadata_errors)} entries couldn't be read (often permissions); the daemon log lists them.`);
     notice.textContent = problems.join(' '); notice.hidden = !problems.length;
+    // Page refreshes rebuild markup; put keyboard focus back where it was.
+    const focused = document.activeElement?.closest?.('[data-key]')?.dataset.key;
     await current?.refresh();
+    if (focused && !document.activeElement?.closest?.('[data-key]')) {
+      document.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+    }
   } catch (error) {
     if (error.status === 401) { signOut(); return; }
     const notice = document.querySelector('#error'); notice.textContent = error.message; notice.hidden = false;

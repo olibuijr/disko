@@ -5,7 +5,7 @@ import { details } from './details.js';
 import { deleteButton } from './delete.js';
 
 export function explorerPage(container) {
-  let alive = true, kind = 'files', sequence = 0, timer;
+  let alive = true, kind = 'files', sequence = 0, timer, shown = '';
   const toolbar = el('div', 'toolbar'), group = el('div', 'toolbar-group');
   group.append(rootDropdown(load), metricToggle(load));
   const types = el('div', 'segmented');
@@ -34,6 +34,9 @@ export function explorerPage(container) {
       const text = input.value.trim();
       const rows = await api(text ? 'find' : 'largest', text ? { q: text, limit: 100 } : { id: state.root.id, kind, metric: state.metric, limit: 100 });
       if (!alive || sequence !== request) return;
+      const signature = JSON.stringify([text, kind, state.metric, rows.map(r => [r.id, r.allocated_bytes, r.apparent_bytes])]);
+      if (signature === shown) return; // Unchanged: keep focus and hover in place.
+      shown = signature;
       results.querySelector('h2').textContent = text ? `Names starting with “${text}”` : `Largest ${kind === 'files' ? 'files' : 'folders'}`;
       table.replaceChildren(fileTable(rows, inspect, !text && kind === 'dirs'));
     } catch (error) { if (alive) table.replaceChildren(empty(error.message)); }

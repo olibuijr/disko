@@ -94,6 +94,7 @@ export function fileTable(nodes, onFile, folders = false) {
     const folder = item.kind === 'directory';
     const link = button('', () => folder ? navigate('tree', item.id) : onFile?.(item), '');
     link.title = folder ? `Open ${item.path} in the disk tree` : `Details for ${item.path}`;
+    link.dataset.key = `row:${item.id}`;
     const name = el('strong');
     if (folder) name.append(el('span', 'kind-icon', '▱'));
     name.append(document.createTextNode(basename(item.path)));

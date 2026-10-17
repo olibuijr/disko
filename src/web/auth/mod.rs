@@ -14,13 +14,23 @@ pub struct Session {
 }
 pub struct Auth {
     hash: String,
+    /// The hash still matches `disko`, which older installers set by default.
+    pub default_password: bool,
     sessions: Mutex<HashMap<String, Session>>,
     attempts: Mutex<HashMap<IpAddr, (i64, u32)>>,
 }
 impl Auth {
     pub fn new(path: &Path) -> Result<Self> {
+        let hash = password::load(path)?;
+        let default_password = Argon2::default()
+            .verify_password(b"disko", &PasswordHash::new(&hash).unwrap())
+            .is_ok();
+        if default_password {
+            eprintln!("dashboard password is the default; set one with `sudo disko password`");
+        }
         Ok(Self {
-            hash: password::load(path)?,
+            default_password,
+            hash,
             sessions: Mutex::new(HashMap::new()),
             attempts: Mutex::new(HashMap::new()),
         })

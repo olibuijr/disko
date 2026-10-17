@@ -26,7 +26,7 @@ pub fn open(path: &Path, write: bool) -> Result<Connection> {
     c.execute_batch("PRAGMA cache_size=-32768; PRAGMA temp_store=MEMORY;")?;
     c.set_prepared_statement_cache_capacity(64);
     if write {
-        c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=4096; PRAGMA journal_size_limit=67108864;
+        c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=16384; PRAGMA journal_size_limit=134217728;
         CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS nodes(
           id INTEGER PRIMARY KEY, parent INTEGER NOT NULL, name BLOB NOT NULL,
@@ -45,6 +45,8 @@ pub fn open(path: &Path, write: bool) -> Result<Connection> {
         CREATE INDEX IF NOT EXISTS child_bytes ON nodes(parent,kind,bytes DESC);
         CREATE TABLE IF NOT EXISTS scans(id INTEGER PRIMARY KEY,started INTEGER NOT NULL,finished INTEGER,visited INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0,watch_errors INTEGER NOT NULL DEFAULT 0,reason TEXT NOT NULL,state TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS samples(ts INTEGER PRIMARY KEY,entries INTEGER NOT NULL,files INTEGER NOT NULL,bytes INTEGER NOT NULL,allocated INTEGER NOT NULL,visited INTEGER NOT NULL,watches INTEGER NOT NULL,state TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS growth(day INTEGER NOT NULL,id INTEGER NOT NULL,blocks INTEGER NOT NULL,PRIMARY KEY(day,id)) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS scan_queue(id INTEGER PRIMARY KEY,place INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY,ts INTEGER NOT NULL,path BLOB NOT NULL,kind TEXT NOT NULL);
         INSERT OR IGNORE INTO nodes VALUES(1,0,x'2f',1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0);
         INSERT OR IGNORE INTO meta VALUES('schema','1');")?;

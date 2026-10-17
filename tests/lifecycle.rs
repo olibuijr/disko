@@ -386,3 +386,74 @@ fn exclusions_change_in_place_without_a_new_index() {
         "changing roots must still be refused"
     );
 }
+
+#[test]
+fn cleanup_finds_rebuildable_folders_outermost_first() {
+    let (_t, root, db) = setup();
+    let write = |p: &Path, n: usize| {
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, vec![7_u8; n]).unwrap();
+    };
+    write(&root.join("app/node_modules/a/index.js"), 3 << 20);
+    write(&root.join("app/node_modules/b/node_modules/c.js"), 2 << 20);
+    write(&root.join("crate/target/debug/big"), 4 << 20);
+    write(&root.join("crate/target/CACHEDIR.TAG"), 43);
+    write(&root.join("py/__pycache__/x.pyc"), 100); // below the size floor
+    write(&root.join("src/main.rs"), 5 << 20); // not rebuildable
+    scan(&db, &root);
+    let rows = run(&db, &["cleanup", "--min-mib", "1"]);
+    let paths: Vec<_> = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["path"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        paths,
+        [
+            root.join("app/node_modules").to_str().unwrap(), // 5 MiB
+            root.join("crate/target").to_str().unwrap(),     // 4 MiB
+        ],
+        "largest first, nested node_modules folded into its parent"
+    );
+}
+
+#[test]
+fn grew_reports_the_deepest_folder_that_explains_growth() {
+    let (_t, root, db) = setup();
+    fs::create_dir_all(root.join("data/videos")).unwrap();
+    fs::create_dir_all(root.join("data/docs")).unwrap();
+    scan(&db, &root);
+    let id = |p: &Path| {
+        run(&db, &["info", p.to_str().unwrap()])["id"]
+            .as_i64()
+            .unwrap()
+    };
+    let (data, videos) = (id(&root.join("data")), id(&root.join("data/videos")));
+    let c = rusqlite::Connection::open(&db).unwrap();
+    let today = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+        / 86400;
+    let gib = 1_i64 << 30;
+    // A week ago data held 2 GiB; videos has since grown by 3 GiB.
+    c.execute_batch(&format!(
+        "INSERT INTO growth VALUES({w},{data},{a}),({w},{videos},{b});
+         UPDATE nodes SET blocks={c} WHERE id={data}; UPDATE nodes SET blocks={d} WHERE id={videos};",
+        w = today - 7,
+        a = 2 * gib,
+        b = gib,
+        c = 5 * gib,
+        d = 4 * gib,
+    ))
+    .unwrap();
+    let grew = run(&db, &["grew", "--days", "7"]);
+    let folders = grew["folders"].as_array().unwrap();
+    assert_eq!(folders.len(), 1, "{grew}");
+    assert_eq!(
+        folders[0]["path"],
+        root.join("data/videos").to_str().unwrap()
+    );
+    assert_eq!(folders[0]["grew_bytes"], 3 * gib);
+}

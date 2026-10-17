@@ -11,12 +11,14 @@ use std::{
     path::{Path, PathBuf},
 };
 mod disks;
+mod insights;
 mod largest;
 mod metadata;
 mod output;
 mod sql;
 mod status;
 pub use disks::filesystems;
+pub use insights::{cleanup, growth};
 pub use largest::largest_under;
 pub use metadata::{node, required};
 use output::{print_rows, rows};
@@ -111,6 +113,27 @@ pub fn run(cli: &Cli) -> Result<()> {
             Ok(())
         }
         Command::Sql { query } => sql::sql(&c, query),
+        Command::Cleanup { limit, min_mib } => {
+            let rows = cleanup(&c, *limit, min_mib << 20)?;
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else {
+                for r in &rows {
+                    println!(
+                        "{:>11}  {:<36}  {}",
+                        output::human(r["allocated_bytes"].as_i64().unwrap_or(0)),
+                        r["reason"].as_str().unwrap_or(""),
+                        r["path"].as_str().unwrap_or("")
+                    );
+                }
+            }
+            Ok(())
+        }
+        Command::Grew { days } => {
+            let v = growth(&c, *days, 25)?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
+            Ok(())
+        }
         _ => unreachable!(),
     }
 }

@@ -1,25 +1,27 @@
-import { api, state, navigate } from './api.js';
-import { el, button, card, bytes, count, duration, basename, empty, ago, ltr } from './dom.js';
-import { chart } from './chart.js';
-
-const KIND = { metadata: 'Changed', subtree: 'Folder rescanned', mount: 'Mounted', unmount: 'Unmounted' };
+import { api, state, navigate, liveness } from './api.js';
+import { el, button, card, bytes, count, empty, ago } from './dom.js';
+import { scanCard, foldersCard, changesCard, speedCard, growthCard } from './cards.js';
 
 export function overviewPage(container) {
-  let alive = true;
+  let alive = true, history = null, historyAt = 0;
   async function refresh() {
     const status = state.status;
     if (!status) return;
-    const [tree, activity, history, roots] = await Promise.all([
-      api('tree', { id: 1, limit: 8 }), api('activity'), api('history'), api('roots'),
+    // History is large and changes every 30 seconds at most.
+    const historyDue = !history || Date.now() - historyAt > 30000;
+    const [tree, activity, fresh, roots, grew] = await Promise.all([
+      api('tree', { id: 1, limit: 8 }), api('activity'), historyDue ? api('history') : null, api('roots'),
+      api('growth', { days: 7 }),
     ]);
     if (!alive) return;
+    if (fresh) { history = fresh; historyAt = Date.now(); }
     state.roots = roots;
-    const online = status.writer_alive && status.heartbeat_age_seconds < 30;
-    const scanning = online && status.state === 'scanning';
+    const live = liveness(status);
     container.replaceChildren(
-      ledgerCard(roots.disks, status, scanning),
-      grid(scanCard(status, history, online, scanning), foldersCard(tree)),
-      grid(changesCard(activity, scanning), speedCard(history)),
+      ledgerCard(roots.disks, status, live.scanning),
+      grid(scanCard(status, history, live), growthCard(grew)),
+      grid(foldersCard(tree), changesCard(activity, live.scanning)),
+      speedCard(history),
     );
   }
   refresh().catch(error => { if (alive) container.replaceChildren(empty(error.message)); });
@@ -45,6 +47,7 @@ function ledgerCard(disks, status, scanning) {
     const reserved = Math.max(0, disk.capacity - disk.used - disk.available);
     if (outside > capacity * .005) hidden = true;
     const row = button('', () => { state.root = disk; state.treeId = disk.id; navigate('tree', disk.id); }, 'ledger-disk');
+    row.dataset.key = `disk:${disk.path}`;
     row.setAttribute('aria-label', `${disk.name}: ${bytes(disk.used)} used of ${bytes(disk.capacity)}, ${bytes(outside)} not in the index, ${bytes(disk.available)} free. Open in disk tree.`);
     const top = el('div', 'ledger-top');
     const name = el('span', 'ledger-name', disk.name);
@@ -89,99 +92,5 @@ function ledgerCard(disks, status, scanning) {
   }
   node.append(facts);
   node.classList.add('wide');
-  return node;
-}
-
-function scanCard(status, history, online, scanning) {
-  if (!online) {
-    const node = card('Daemon not running', `Showing the index as it was ${ago(status.heartbeat)}.`);
-    node.append(el('p', 'muted', 'Start it with: sudo systemctl start disko'));
-    return node;
-  }
-  if (status.state === 'waiting for disk space') {
-    const node = card('Scan waiting for disk space', 'Less than 1 GiB is free where the index is stored.');
-    node.append(el('p', 'muted', 'Changes are still tracked. The full scan starts once space is freed.'));
-    return node;
-  }
-  if (!scanning) {
-    const node = card('Watching for changes', 'The index updates as files change.');
-    const summary = el('div', 'scan-state');
-    summary.append(el('strong', '', count(status.totals.entries)), el('span', '', 'entries indexed'));
-    node.append(summary, details([
-      ['Last change seen', status.last_event ? ago(status.last_event) : 'None yet'],
-      ['Last full scan', ago(status.last_scan)],
-      ['It took', duration(Number(status.last_scan_seconds))],
-    ]));
-    return node;
-  }
-  const node = card('Scanning', 'Totals are partial until the scan finishes.');
-  const now = Date.now() / 1000;
-  const elapsed = Math.max(1, now - Number(status.scan_started || now));
-  const visited = Math.max(0, status.visited_this_run - Number(status.scan_start_visited || 0));
-  const rate = visited / elapsed;
-  const expected = history.scans.find(s => s.state === 'complete')?.visited || 0;
-  const summary = el('div', 'scan-state');
-  summary.append(el('strong', '', count(visited)), el('span', '', expected ? `of about ${count(expected)} entries` : 'entries so far'));
-  const track = el('div', expected ? 'progress-track' : 'pulse-track'), fill = el('span');
-  if (expected) {
-    const share = Math.min(.99, visited / expected);
-    fill.style.width = `${share * 100}%`;
-    track.setAttribute('role', 'progressbar'); track.setAttribute('aria-valuenow', String(Math.round(share * 100)));
-    track.setAttribute('aria-valuemin', '0'); track.setAttribute('aria-valuemax', '100'); track.setAttribute('aria-label', 'Scan progress');
-  }
-  track.append(fill);
-  const left = expected && rate > 0 ? Math.max(0, (expected - visited) / rate) : NaN;
-  const path = el('div', 'scan-path');
-  path.append(el('span', '', 'Now in'), el('code', '', ltr(status.scan_path || '/')));
-  node.append(summary, track, details([
-    ['Speed', `${count(Math.round(rate))} per second`],
-    ['Running for', duration(elapsed)],
-    ['Time left', Number.isFinite(left) ? (visited >= expected ? 'Almost done' : `About ${duration(left)}`) : 'Estimating'],
-  ]), path);
-  return node;
-}
-
-function details(pairs) {
-  const node = el('div', 'scan-details');
-  for (const [label, value] of pairs) {
-    const field = el('div'); field.append(el('label', '', label), el('strong', '', value)); node.append(field);
-  }
-  return node;
-}
-
-function foldersCard(tree) {
-  const node = card('Largest folders', 'At the top of the index', button('Open disk tree', () => navigate('tree', 1), 'text-button'));
-  const max = Math.max(...tree.children.map(n => n.allocated_bytes), 1);
-  for (const item of tree.children) {
-    const row = button('', () => navigate('tree', item.kind === 'directory' ? item.id : 1), 'folder-row');
-    const copy = el('div', 'folder-copy');
-    copy.append(el('strong', '', basename(item.path)), el('small', '', `${count(item.files)} ${item.files === 1 ? 'file' : 'files'}`));
-    const size = el('div', 'folder-size', bytes(item.allocated_bytes));
-    const bar = el('div', 'folder-bar'), fill = el('span');
-    fill.style.width = `${item.allocated_bytes / max * 100}%`;
-    bar.append(fill); size.append(bar);
-    row.append(copy, size); node.append(row);
-  }
-  return node;
-}
-
-function changesCard(activity, scanning) {
-  const node = card('Recent changes', 'What the watcher picked up most recently');
-  if (!activity.length) { node.append(empty(scanning ? 'Changes appear here once the first scan is done.' : 'Nothing has changed since the last scan.')); return node; }
-  for (const item of activity.slice(0, 8)) {
-    const row = el('div', 'activity-row'), copy = el('div');
-    const parent = item.path.slice(0, item.path.lastIndexOf('/')) || '/';
-    copy.append(el('span', 'activity-name', basename(item.path)), el('span', 'activity-dir mono', ltr(parent)));
-    copy.title = item.path;
-    const when = el('span', 'activity-when');
-    when.append(el('span', '', KIND[item.kind] || item.kind), el('br'), document.createTextNode(ago(item.ts)));
-    row.append(copy, when); node.append(row);
-  }
-  return node;
-}
-
-function speedCard(history) {
-  const node = card('Indexing speed', 'Entries per second, sampled every 30 seconds for a week');
-  node.append(chart(history.samples));
   return node;
 }

@@ -75,6 +75,8 @@ pub(super) fn prepare(cli: &Cli, s: &ScanArgs) -> Result<(Index, std::fs::File, 
             .cloned()
             .collect();
         if before != excludes {
+            // Newly included trees are only found by a scan from the roots.
+            c.execute("DELETE FROM scan_queue", [])?;
             eprintln!(
                 "coverage: exclusions changed; pruning {} newly excluded trees",
                 pruned.len()

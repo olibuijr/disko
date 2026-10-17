@@ -58,7 +58,7 @@ pub(super) fn dispatch(app: &App, request: &mut Request, port: u16) -> Result<Re
             200,
             match session {
                 Some(s) => {
-                    json!({"authenticated":true,"token":s.csrf,"can_rescan":app.rescan.is_some(),"version":env!("CARGO_PKG_VERSION")})
+                    json!({"authenticated":true,"token":s.csrf,"can_rescan":app.rescan.is_some(),"default_password":app.auth.default_password,"version":env!("CARGO_PKG_VERSION")})
                 }
                 None => json!({"authenticated":false}),
             },
@@ -75,7 +75,7 @@ pub(super) fn dispatch(app: &App, request: &mut Request, port: u16) -> Result<Re
                 Ok(s) => {
                     let mut r = Reply::json(
                         200,
-                        json!({"authenticated":true,"token":s.csrf,"can_rescan":app.rescan.is_some(),"version":env!("CARGO_PKG_VERSION")}),
+                        json!({"authenticated":true,"token":s.csrf,"can_rescan":app.rescan.is_some(),"default_password":app.auth.default_password,"version":env!("CARGO_PKG_VERSION")}),
                     );
                     r.cookie = Some(format!(
                         "disko_session={}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200",

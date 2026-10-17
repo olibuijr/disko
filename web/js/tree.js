@@ -128,7 +128,7 @@ export function treePage(container) {
       const tile = button('', () => {
         if (node?.kind === 'directory') { state.treeId = node.id; load(); }
         else if (node) inspect(node);
-      }, 'tree-tile');
+      }, 'tree-tile'); if (node) tile.dataset.key = `tile:${node.id}`;
       tile.style.left = `${box.x}px`; tile.style.top = `${box.y}px`;
       tile.style.width = `${box.width}px`; tile.style.height = `${box.height}px`;
       tile.style.background = `linear-gradient(160deg, ${shade(base, 22)} 0%, ${base} 55%, ${shade(base, -18)} 100%)`;
@@ -175,13 +175,13 @@ export function treePage(container) {
     info.querySelector(".card-head").append(deleteButton(node, () => { state.treeId = data.ancestors.at(-2)?.id || 1; detail.replaceChildren(); load(); }));
     detail.replaceChildren(info);
   }
-  let viewFolder = null;
+  let viewFolder = null, lastDrawn = '';
   async function load() {
     const request = ++sequence;
     try {
       const result = await api('tree', { id: state.treeId, metric: state.metric, limit: 200 });
-      if (!alive || request !== sequence) return;
-      data = result;
+      const drawn = JSON.stringify([state.metric, result]); if (!alive || request !== sequence || drawn === lastDrawn) return;
+      data = result; lastDrawn = drawn;
       if (viewFolder !== data.node.id) { viewFolder = data.node.id; resetView(); }
       crumbs.replaceChildren();
       for (const [i, ancestor] of data.ancestors.entries()) {

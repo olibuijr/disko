@@ -32,18 +32,28 @@ impl Index {
 
     fn sweep(&mut self, p: &Path, root: i64) -> Result<()> {
         self.watch_dir(p, None);
-        let mut pool = pool::Pool::start(
-            self.stop.clone(),
-            self.filter.clone(),
-            self.jobs,
-            walk::Job {
-                path: p.to_owned(),
-                id: root,
-                seen: self.next_seen(),
-                place: walk::Place::Regular,
-            },
-        )?;
+        let job = walk::Job {
+            path: p.to_owned(),
+            id: root,
+            seen: self.next_seen(),
+            place: walk::Place::Regular,
+        };
+        self.queue_push(&job)?;
+        self.drain(vec![job])
+    }
+
+    /// Walk the given directories and everything below them.
+    pub(super) fn drain(&mut self, jobs: Vec<walk::Job>) -> Result<()> {
+        let mut jobs = jobs.into_iter();
+        let Some(first) = jobs.next() else {
+            return Ok(());
+        };
+        let mut pool = pool::Pool::start(self.stop.clone(), self.filter.clone(), self.jobs, first)?;
         let mut in_flight = 1usize;
+        for job in jobs {
+            pool.dispatch(job);
+            in_flight += 1;
+        }
         while in_flight > 0 {
             let result = pool.receive()?;
             in_flight -= 1;
@@ -56,8 +66,9 @@ impl Index {
         Ok(())
     }
 
-    /// Replay one enumerated directory: upsert children, enqueue new directories
-    /// for the walk, then prune entries that disappeared since that generation.
+    /// Replay one enumerated directory against its indexed children: write only
+    /// new or changed entries, enqueue subdirectories, and remove names that are
+    /// gone. Unchanged entries cost no writes, which keeps rescans cheap.
     fn absorb(&mut self, pool: &mut pool::Pool, r: walk::DirResult) -> Result<usize> {
         let walk::DirResult {
             path,
@@ -78,15 +89,24 @@ impl Index {
         for e in entry_failed {
             self.error(&path, &e);
         }
+        let mut known = self.children_of(id)?;
         for (name, e) in stat_failed {
-            self.c
-                .prepare_cached("UPDATE nodes SET seen=?3 WHERE parent=?1 AND name=?2")?
-                .execute(params![id, name.as_bytes(), seen])?;
+            // Preserve old information on permission/race errors; never infer deletion.
+            known.remove(name.as_bytes());
             self.error(&path.join(&name), &e);
         }
         for (name, m) in children {
             let child = path.join(&name);
-            let node = self.upsert(id, &name, &m, seen)?;
+            let node = match known.remove(name.as_bytes()) {
+                Some(k) if k.matches(&m) => {
+                    self.visited += 1;
+                    if m.is_dir() {
+                        self.parents.insert(k.id, id);
+                    }
+                    k.id
+                }
+                _ => self.upsert(id, &name, &m, seen)?,
+            };
             if !m.is_dir() {
                 continue;
             }
@@ -95,102 +115,31 @@ impl Index {
                 self.prune_children(node)?;
                 continue;
             }
-            let place = place_for(inherited, root, &name);
+            let place = walk::place_for(inherited, root, &name);
             self.watch_dir(&child, Some(&m));
-            pool.dispatch(walk::Job {
+            let job = walk::Job {
                 path: child,
                 id: node,
                 seen: self.next_seen(),
                 place,
-            });
+            };
+            self.queue_push(&job)?;
+            pool.dispatch(job);
             queued += 1;
         }
         if complete {
-            let stale = self
-                .c
-                .prepare_cached("SELECT id FROM nodes WHERE parent=?1 AND seen!=?2")?
-                .query_map(params![id, seen], |row| row.get::<_, i64>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()?;
-            for node in stale {
-                self.remove(node)?;
+            for gone in known.into_values() {
+                self.remove(gone.id)?;
             }
         }
+        self.queue_done(id)?;
+        // Unchanged entries never reach upsert; keep heartbeats and batches flowing.
+        self.maybe_commit()?;
         Ok(queued)
     }
 
-    fn next_seen(&mut self) -> i64 {
+    pub(super) fn next_seen(&mut self) -> i64 {
         self.generation += 1;
         self.generation
-    }
-
-    pub fn reconcile(&mut self) -> Result<()> {
-        let start_visited = self.visited;
-        let start_errors = self.errors;
-        let start_watch_errors = self.watch_errors;
-        let reason: String = self
-            .c
-            .query_row(
-                "SELECT value FROM meta WHERE key='recovery_reason'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap_or_else(|_| "startup".into());
-        self.c.execute(
-            "INSERT INTO scans(started,reason,state) VALUES(?1,?2,'scanning')",
-            params![now(), reason],
-        )?;
-        let scan_id = self.c.last_insert_rowid();
-        set_meta(&self.c, "scan_started", now())?;
-        set_meta(&self.c, "scan_start_visited", start_visited)?;
-        set_meta(&self.c, "state", "scanning")?;
-        self.commit()?;
-        let start_time = Instant::now();
-        for root in self.roots.clone() {
-            self.sync(&root, true)?;
-        }
-        set_meta(&self.c, "last_scan", now())?;
-        self.c.execute("UPDATE scans SET finished=?2,visited=?3,errors=?4,watch_errors=?5,state='complete' WHERE id=?1",params![scan_id,now(),(self.visited-start_visited) as i64,(self.errors-start_errors) as i64,(self.watch_errors-start_watch_errors) as i64])?;
-        self.c.execute(
-            "DELETE FROM scans WHERE id NOT IN (SELECT id FROM scans ORDER BY id DESC LIMIT 100)",
-            [],
-        )?;
-        set_meta(
-            &self.c,
-            "last_scan_seconds",
-            start_time.elapsed().as_secs_f64(),
-        )?;
-        set_meta(
-            &self.c,
-            "state",
-            if self.watcher.is_some() {
-                "watching"
-            } else {
-                "idle"
-            },
-        )?;
-        self.checkpoint()?;
-        eprintln!(
-            "indexed {} entries in {:.2}s; {} metadata errors, {} watch errors",
-            self.visited,
-            start_time.elapsed().as_secs_f64(),
-            self.errors,
-            self.watch_errors
-        );
-        Ok(())
-    }
-}
-
-/// Keep the former root-first priority: home and var before the rest, /mnt last.
-fn place_for(inherited: walk::Place, root: bool, name: &OsStr) -> walk::Place {
-    if matches!(inherited, walk::Place::Tail) {
-        return walk::Place::Tail;
-    }
-    if !root {
-        return walk::Place::Regular;
-    }
-    match name.as_bytes() {
-        b"home" | b"var" | b"usr" | b"tmp" => walk::Place::Front,
-        b"mnt" => walk::Place::Tail,
-        _ => walk::Place::Regular,
     }
 }

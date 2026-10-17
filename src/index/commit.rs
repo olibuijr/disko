@@ -1,5 +1,11 @@
 use super::*;
 
+/// Scan batches: large and infrequent, so hot pages (ancestor totals, index
+/// roots) are rewritten once per batch rather than every few seconds. The
+/// dashboard calls a heartbeat late after 45s, so stay well under that.
+const COMMIT_ROWS: usize = 32768;
+const COMMIT_EVERY: Duration = Duration::from_secs(15);
+
 impl Index {
     pub(super) fn ancestors(&mut self, mut id: i64, d: Delta) -> Result<()> {
         while id > 0 {
@@ -73,7 +79,7 @@ impl Index {
     }
 
     pub(super) fn maybe_commit(&mut self) -> Result<()> {
-        if self.dirty >= 4096 || self.last_commit.elapsed() > Duration::from_secs(2) {
+        if self.dirty >= COMMIT_ROWS || self.last_commit.elapsed() > COMMIT_EVERY {
             self.commit()?;
         }
         Ok(())

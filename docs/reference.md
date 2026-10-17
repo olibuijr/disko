@@ -19,10 +19,12 @@ Global options: `--db PATH` (or `DISKO_DB`) and `--json`.
 | `find PREFIX [-n N] [--contains]` | Prefix or substring filename search |
 | `status` | Coverage, progress and health |
 | `sql QUERY` | Read-only SQLite query; JSON Lines output |
+| `cleanup [-n N] [--min-mib M]` | Largest build-output, package and cache folders |
+| `grew [--days N]` | Large folders that grew most, from the daily size record |
 
 Password files default to `web-password` next to the database. Keep database
-storage outside indexed roots. An existing index's coverage cannot be changed in
-place; use another database. Paths in storage remain byte-exact; JSON includes
+storage outside indexed roots. Exclusions can change in place; changing roots
+needs another database. Paths in storage remain byte-exact; JSON includes
 `path_bytes` when a path cannot be represented as UTF-8. Timestamps are Unix seconds.
 
 ## SQL
@@ -34,7 +36,8 @@ symlink=2, special=3), `size`, `allocated`, `bytes`, `blocks`, `files`, `entries
 `size` and `allocated` are own-node bytes. `bytes` and `blocks` are subtree totals.
 Directory own logical size is zero; allocated directory blocks are included.
 `entries` includes the node itself. `meta`, `scans`, `samples` and `activity` hold
-status and bounded history.
+status and bounded history. `growth` keeps a daily `(day, id, blocks)` record of
+folders of 1 GiB or more for 60 days. Scans no longer update `seen`.
 
 ```sh
 disko sql 'SELECT uid,count(*) AS files,sum(size) AS bytes FROM nodes WHERE kind=0 GROUP BY uid ORDER BY bytes DESC'

@@ -8,21 +8,7 @@ impl Index {
         m: &fs::Metadata,
         seen: i64,
     ) -> Result<i64> {
-        let kind = if m.is_dir() {
-            1
-        } else if m.is_file() {
-            0
-        } else if m.file_type().is_symlink() {
-            2
-        } else {
-            3
-        };
-        let bytes = if kind == 1 || kind == 3 {
-            0
-        } else {
-            m.len() as i64
-        };
-        let blocks = (m.blocks() * 512) as i64;
+        let (kind, bytes, blocks) = known::shape(m);
         let old: Option<(i64, i64, i64, i64)> = self
             .c
             .prepare_cached("SELECT id,kind,size,allocated FROM nodes WHERE parent=?1 AND name=?2")?

@@ -18,6 +18,15 @@ export const state = {
   treeId: 1,
   refresh: null,
 };
+/**
+ * The daemon is alive when its process exists. A late heartbeat on a live
+ * process means it is busy (a slow disk sync), not stopped.
+ */
+export function liveness(status) {
+  const alive = Boolean(status.writer_alive);
+  const late = alive && status.heartbeat_age_seconds > 45;
+  return { alive, late, scanning: alive && status.state === 'scanning' };
+}
 export function metric(node) {
   return Number(node[state.metric === 'apparent' ? 'apparent_bytes' : 'allocated_bytes'] || 0);
 }

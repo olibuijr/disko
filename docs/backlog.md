@@ -18,6 +18,20 @@ Review findings from 2026-10-17 and what happened to each.
 | — | Dashboard used Btrfs subvolumes as separate disks, summing capacity four times | Fixed in 0.2.0 |
 | — | Web UI: unreadable terminal styling, jargon, misleading scan rate and history counts | Reworked in 0.2.0; see the changelog |
 
+Adversarial review, 2026-10-17 (0.3.0):
+
+| Item | Status |
+|------|--------|
+| Live dashboard accepted the default password `disko` | Rotated on titan; installer now random; dashboard warns |
+| Rescans rewrote every row and index (1.2 GiB for 400k unchanged entries) | Fixed: unchanged rows are not written |
+| Page rebuilt every 3 s: lost focus, screen reader spam | Fixed |
+| No cleanup suggestions, no growth view | Added |
+| Busy daemon shown as not running | Fixed |
+| Full startup rescan after every restart | Fixed: an interrupted scan resumes from its saved queue; a restart after a finished scan still walks everything, without writes |
+| Index commits every 2 s and Btrfs copy-on-write: 845k-extent index, swap and I/O thrash on titan | Fixed: larger batches, NOCOW index directory, idle priority |
+| Case-insensitive and substring search in the dashboard | Open: needs an index that would grow the database |
+| Snapshot list with exclusive sizes | Open: needs Btrfs quotas |
+
 Open:
 
 - The treemap at the index root mixes disks; selecting one disk is clearer.

@@ -1,7 +1,7 @@
 # Disko 🪩
 
 [![CI](https://github.com/olibuijr/disko/actions/workflows/ci.yml/badge.svg)](https://github.com/olibuijr/disko/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.2.0-78944a)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-78944a)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **A Rust filesystem indexing daemon for fast disk-space queries and live metadata.**
@@ -50,7 +50,9 @@ read access to the metadata database. Other init systems can run the binary dire
 Open **http://0.0.0.0:7331** (or localhost) on the host, or **http://HOST_LAN_IP:7331** from
 another device. The installed service listens on `0.0.0.0:7331`.
 
-The initial password is **`disko`**. Set a different password for a shared LAN:
+The installer generates a random password and prints it once. Installs made
+before 0.3.0 used `disko`; the dashboard warns while that is still set. To set
+a password:
 
 ```sh
 read -r -s -p 'New password: ' disko_password

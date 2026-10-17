@@ -48,7 +48,7 @@ pub fn print_rows(c: &Connection, ids: &[i64], apparent: bool, json_output: bool
     }
     Ok(())
 }
-fn human(n: i64) -> String {
+pub(super) fn human(n: i64) -> String {
     let mut n = n as f64;
     let mut unit = 0;
     while n >= 1024. && unit < 5 {

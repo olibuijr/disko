@@ -15,8 +15,11 @@ use std::{
 
 mod commit;
 mod db;
+mod growth;
+mod known;
 mod paths;
 mod pool;
+mod reconcile;
 mod scan;
 mod updates;
 mod walk;
@@ -62,6 +65,8 @@ pub struct Index {
     generation: i64,
     current_path: PathBuf,
     last_sample: i64,
+    /// Set during a full scan: pending directories are kept in `scan_queue`.
+    resumable: bool,
     pub stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -95,6 +100,7 @@ impl Index {
             generation: SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos() as i64,
             current_path: PathBuf::from("/"),
             last_sample: 0,
+            resumable: false,
             stop,
         })
     }

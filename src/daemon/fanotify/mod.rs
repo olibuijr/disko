@@ -44,12 +44,18 @@ pub(super) fn start(
     overflow: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
 ) -> Result<(Fanotify, HashSet<u64>)> {
-    let raw = unsafe {
+    // An overflow costs a full rescan, so prefer an unbounded kernel queue
+    // (needs CAP_SYS_ADMIN, which filesystem marks require anyway).
+    let init = |extra| unsafe {
         libc::fanotify_init(
-            libc::FAN_CLOEXEC | libc::FAN_NONBLOCK | libc::FAN_REPORT_DFID_NAME,
+            libc::FAN_CLOEXEC | libc::FAN_NONBLOCK | libc::FAN_REPORT_DFID_NAME | extra,
             libc::O_RDONLY as u32 | libc::O_CLOEXEC as u32,
         )
     };
+    let mut raw = init(libc::FAN_UNLIMITED_QUEUE);
+    if raw < 0 {
+        raw = init(0);
+    }
     if raw < 0 {
         return Err(io::Error::last_os_error().into());
     }

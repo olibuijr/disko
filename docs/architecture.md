@@ -91,6 +91,15 @@ Roots are fixed for an index. Exclusions can change in place: on startup, newly
 excluded trees are removed from the index and newly included ones are indexed
 by the startup scan.
 
+## Restarts
+
+A full scan keeps the folders it has not yet read in `scan_queue`, committed
+together with the entries it indexes. A stopped daemon therefore leaves an exact
+frontier, and the next start finishes it (scan reason `resumed after restart`)
+instead of walking every root again. Changes made while the daemon was stopped,
+in parts already scanned, are picked up by the next reconciliation. Changing
+exclusions discards the queue, since newly included trees need a full walk.
+
 ## Disk accounting
 
 `status` and the dashboard report each filesystem once (Btrfs subvolumes are

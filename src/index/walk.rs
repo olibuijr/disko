@@ -11,6 +11,20 @@ pub(super) enum Place {
     Tail,
 }
 
+impl Place {
+    /// Stored form in `scan_queue`.
+    pub(super) fn code(self) -> i64 {
+        self as i64
+    }
+    pub(super) fn from_code(code: i64) -> Self {
+        match code {
+            0 => Place::Front,
+            2 => Place::Tail,
+            _ => Place::Regular,
+        }
+    }
+}
+
 pub(super) struct Filter {
     excludes: Vec<PathBuf>,
 }
@@ -53,6 +67,7 @@ pub(super) fn crew_size(requested: u32) -> usize {
         n => n as usize,
     }
     .clamp(1, 16)
+    .min(if requested == 0 { 4 } else { 16 })
 }
 
 pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResult {
@@ -99,4 +114,19 @@ pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResu
         }
     }
     r
+}
+
+/// Keep the former root-first priority: home and var before the rest, /mnt last.
+pub(super) fn place_for(inherited: Place, root: bool, name: &OsStr) -> Place {
+    if matches!(inherited, Place::Tail) {
+        return Place::Tail;
+    }
+    if !root {
+        return Place::Regular;
+    }
+    match name.as_bytes() {
+        b"home" | b"var" | b"usr" | b"tmp" => Place::Front,
+        b"mnt" => Place::Tail,
+        _ => Place::Regular,
+    }
 }
