@@ -26,5 +26,6 @@ pub fn status_value(c: &Connection, db: &Path) -> Result<Value> {
         let capacities:Vec<_>=roots.iter().filter_map(Value::as_str).map(|p|json!({"root":p,"capacity_bytes":fs2::total_space(p).ok(),"available_bytes":fs2::available_space(p).ok()})).collect();
         meta.insert("filesystems".into(), json!(capacities));
     }
+    meta.insert("disks".into(), json!(filesystems(c)?));
     Ok(Value::Object(meta))
 }

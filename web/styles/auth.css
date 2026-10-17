@@ -1,24 +1,24 @@
-body:not(.authenticated) > .sidebar,body:not(.authenticated) > .workspace { display: none; }
+body:not(.authenticated) > .sidebar, body:not(.authenticated) > .workspace { display: none; }
 body.authenticated #login-screen { display: none; }
-#login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(ellipse at 40% 30%,#13251a,transparent 65%),var(--paper); }
-.login-card { width: min(380px,100%); padding: 36px; border: 1px solid var(--line); border-radius: 3px; background: #101813; box-shadow: 0 18px 60px #0005; }
-.login-card .brand { padding: 0; margin-bottom: 32px; }
-.login-card h1 { font-size: 26px; letter-spacing: -.7px; }
-.login-card p { font-size: 12px; color: var(--muted); margin: 10px 0 24px; }
-.login-card label { font-size: 11px; display: block; margin-bottom: 7px; color: #90ad83; }
-.login-card input { width: 100%; border: 1px solid var(--line); border-radius: 3px; padding: 11px 12px; color: var(--ink); background: #0b140e; }
-.login-card .button { width: 100%; margin-top: 18px; }
-.login-card #login-error { color: #f18d75; min-height: 18px; font-size: 11px; margin: 12px 0 0; }
-#logout { background: none; border: 0; color: #83998a; font-size: 10px; padding: 0; }
-.danger { color: #fff; background: #ad4234; }
-.danger-outline { background: #101813; border-color: #704438; color: #ee9e84; }
-.delete-dialog { width: min(440px,calc(100vw - 32px)); padding: 28px; border: 1px solid #5e3d32; border-radius: 3px; color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px #0003; }
-.delete-dialog::backdrop { background: #1a251e66; backdrop-filter: blur(3px); }
-.delete-dialog h2 { font-size: 20px; margin-top: 15px; }
-.delete-dialog p { font-size: 12px; color: var(--muted); margin-top: 10px; }
-.delete-symbol { background: #381e19; color: #ee9e84; width: 38px; height: 38px; border-radius: 3px; font-size: 27px; display: grid; place-items: center; }
-.delete-entry { padding: 13px; border: 1px solid var(--line); border-radius: 3px; margin-top: 20px; background: #0c150f; }
-.delete-entry code { font-size: 11px; display: block; overflow-wrap: anywhere; }
-.delete-entry small { display: block; font-size: 10px; margin-top: 6px; }
+#login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.login-card { width: min(360px, 100%); }
+.login-card .brand { padding: 0; margin-bottom: 36px; font-size: 22px; }
+.login-card h1 { font-size: 24px; }
+.login-card p { font-size: 14px; color: var(--muted); margin: 8px 0 26px; }
+.login-card label { font-size: 13px; font-weight: 550; display: block; margin-bottom: 6px; }
+.login-card input { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; color: var(--ink); background: var(--surface); font-size: 15px; }
+.login-card input:focus-visible { outline: 0; border-color: var(--lime); box-shadow: 0 0 0 2px #2f4a2a; }
+.login-card .button { width: 100%; margin-top: 16px; padding: 11px 16px; }
+.login-card #login-error { color: var(--danger); min-height: 20px; font-size: 13px; margin: 12px 0 0; }
+.danger { color: #fff; background: #b4483a; }
+.danger-outline { background: transparent; border-color: #6b3f34; color: var(--danger); }
+.danger-outline:hover:not(:disabled) { background: #2a1915; }
+.delete-dialog { width: min(460px, calc(100vw - 32px)); padding: 26px; border: 1px solid #5a3a31; border-radius: 10px; color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px #000a; }
+.delete-dialog::backdrop { background: #0a0d0bb3; backdrop-filter: blur(2px); }
+.delete-dialog h2 { font-size: 20px; }
+.delete-dialog p { font-size: 14px; color: var(--muted); margin-top: 8px; }
+.delete-entry { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); margin-top: 18px; background: #121614; }
+.delete-entry code { font-size: 13px; display: block; overflow-wrap: anywhere; }
+.delete-entry small { display: block; font-size: 13px; margin-top: 6px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
-.delete-dialog p.delete-error { color: #ee9e84; }
+.delete-dialog p.delete-error { color: var(--danger); }

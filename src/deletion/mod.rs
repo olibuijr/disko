@@ -49,19 +49,57 @@ impl Target {
             path,
         })
     }
+    /// Check the whole tree first, so limits and boundaries fail before
+    /// anything is removed rather than leaving a partially deleted folder.
     pub fn delete(self) -> Result<()> {
-        remove(self.parent.as_raw_fd(), &self.name, self.dev, self.ino, 0)
+        let parent_dev = fd::stat(self.parent.as_raw_fd(), std::ffi::OsStr::new("."))?.st_dev;
+        walk(
+            self.parent.as_raw_fd(),
+            &self.name,
+            parent_dev,
+            self.dev,
+            self.ino,
+            0,
+            false,
+        )?;
+        walk(
+            self.parent.as_raw_fd(),
+            &self.name,
+            parent_dev,
+            self.dev,
+            self.ino,
+            0,
+            true,
+        )
     }
 }
 
-fn remove(parent: i32, name: &std::ffi::OsStr, dev: u64, ino: u64, depth: usize) -> Result<()> {
+/// Visit a tree bottom-up, unlinking only when `unlink` is set. Refuses to
+/// enter another mount or a nested Btrfs subvolume (a different st_dev on the
+/// same mount), whose removal would delete a subvolume.
+fn walk(
+    parent: i32,
+    name: &std::ffi::OsStr,
+    parent_dev: u64,
+    dev: u64,
+    ino: u64,
+    depth: usize,
+    unlink: bool,
+) -> Result<()> {
     if depth > 256 {
-        bail!("directory nesting exceeds the deletion limit");
+        bail!("directory nesting exceeds the deletion limit; nothing was deleted");
     }
     let stat = fd::stat(parent, name)?;
     fd::same(&stat, dev, ino)?;
     if stat.st_mode & libc::S_IFMT != libc::S_IFDIR {
-        return fd::unlink(parent, name, false);
+        return if unlink {
+            fd::unlink(parent, name, false)
+        } else {
+            Ok(())
+        };
+    }
+    if stat.st_dev != parent_dev {
+        bail!("refusing to delete a subvolume or another filesystem inside the selection");
     }
     let directory = fd::open_dir(parent, name)?;
     fd::same(
@@ -76,13 +114,18 @@ fn remove(parent: i32, name: &std::ffi::OsStr, dev: u64, ino: u64, depth: usize)
     for entry in std::fs::read_dir(path)? {
         let name = entry?.file_name();
         let child = fd::stat(directory.as_raw_fd(), &name)?;
-        remove(
+        walk(
             directory.as_raw_fd(),
             &name,
-            child.st_dev as u64,
-            child.st_ino as u64,
+            stat.st_dev,
+            child.st_dev,
+            child.st_ino,
             depth + 1,
+            unlink,
         )?;
+    }
+    if !unlink {
+        return Ok(());
     }
     fd::same(&fd::stat(parent, name)?, dev, ino)?;
     fd::unlink(parent, name, true)

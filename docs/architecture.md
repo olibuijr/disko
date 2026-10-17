@@ -51,7 +51,9 @@ The scanner skips `.snapshots`, virtual filesystems and its state directory.
 
 Rename handling reconciles old and new subtrees. Hardlink writes refresh indexed
 sibling paths. Queue overflow and watcher errors request a full reconciliation.
-A scheduled reconciliation also runs every six hours. Metadata read failures
+A scheduled reconciliation also runs once a day. When more than 65,536 distinct
+paths are pending (for example during a long scan), they merge into their parent
+directories as recursive resyncs instead of forcing a rescan of every root. Metadata read failures
 preserve old information instead of assuming the inaccessible subtree was deleted.
 
 Events are hints about current state, not an ordered filesystem journal. Remote
@@ -72,3 +74,33 @@ Four HTTP workers serve assets embedded in the binary and snapshot-based API
 queries. No frontend toolchain or external asset service is required at runtime.
 Authentication, request validation and deletion are separate Rust modules.
 See [security.md](security.md) for the mutation boundary and known limits.
+
+## Mounts
+
+The daemon rereads `/proc/self/mountinfo` every two seconds. A new or removed
+mount below a root is marked for fanotify (if supported), its mountpoint is
+resynced, and watches below it are reset. Decoding opens a current mountpoint
+per event instead of holding descriptors, so Disko never keeps a filesystem
+busy and `umount` keeps working. Overlay mounts and bind mounts that show a
+directory already visible elsewhere on the same filesystem are recorded but not
+descended, so their contents are not counted twice.
+
+## Coverage changes
+
+Roots are fixed for an index. Exclusions can change in place: on startup, newly
+excluded trees are removed from the index and newly included ones are indexed
+by the startup scan.
+
+## Disk accounting
+
+`status` and the dashboard report each filesystem once (Btrfs subvolumes are
+grouped by device) with capacity, free and used space, the space indexed paths
+account for, and the difference. That difference is mostly snapshots, excluded
+trees and filesystem metadata, offset by compression and shared extents.
+
+## Low disk space
+
+With less than 1 GiB free on the index's filesystem, full scans wait (status
+`waiting for disk space`) while event processing continues. A failing service
+restarts with a backoff of up to 30 minutes.
+

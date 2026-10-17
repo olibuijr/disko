@@ -24,6 +24,9 @@ impl Index {
         if !recursive || !metadata.is_dir() {
             return Ok(());
         }
+        if self.skip.contains(p) {
+            return self.prune_children(id);
+        }
         self.sweep(p, id)
     }
 
@@ -85,6 +88,11 @@ impl Index {
             let child = path.join(&name);
             let node = self.upsert(id, &name, &m, seen)?;
             if !m.is_dir() {
+                continue;
+            }
+            if self.skip.contains(&child) {
+                // Contents are counted where the filesystem is mounted elsewhere.
+                self.prune_children(node)?;
                 continue;
             }
             let place = place_for(inherited, root, &name);

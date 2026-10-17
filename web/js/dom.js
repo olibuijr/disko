@@ -30,6 +30,18 @@ export const bytes = value => {
 export const count = value => Number(value || 0).toLocaleString();
 export const basename = path => path === '/' ? '/' : path.split('/').filter(Boolean).at(-1);
 export const stamp = ts => ts ? new Date(ts * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+/** Relative time, for "when did this happen" rather than an exact stamp. */
+export function ago(ts) {
+  if (!ts) return 'never';
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 45) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  if (s < 86400 * 30) return `${Math.round(s / 86400)} days ago`;
+  return new Date(ts * 1000).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+}
+/** Keep a path's start visible inside an rtl ellipsis container. */
+export const ltr = text => `\u200e${text}\u200e`;
 export function duration(seconds) {
   if (!Number.isFinite(seconds)) return '—';
   if (seconds < 60) return `${Math.floor(seconds)}s`;
@@ -43,4 +55,4 @@ export function toast(text) {
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => { node.hidden = true; }, 4500);
 }
-export const colors = ['#244a2c', '#1d4238', '#3e4423', '#203d49', '#424022', '#43302b', '#283e25', '#263d3b'];
+export const colors = ['#2a4a2f', '#24433d', '#424727', '#23404c', '#47432a', '#46332d', '#2d4229', '#29403e'];

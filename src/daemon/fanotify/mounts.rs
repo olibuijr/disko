@@ -1,135 +1,228 @@
+use crate::mounts::{Mount, containing};
 use anyhow::{Result, bail};
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
-    ffi::{CStr, CString, OsString},
+    collections::{HashMap, HashSet},
+    ffi::{CStr, CString},
     fs::File,
     io,
     mem::MaybeUninit,
     os::{
         fd::{AsRawFd, FromRawFd, OwnedFd},
-        unix::{
-            ffi::{OsStrExt, OsStringExt},
-            fs::MetadataExt,
-        },
+        unix::{ffi::OsStrExt, fs::MetadataExt},
     },
     path::{Path, PathBuf},
 };
 
-/// A directory on a marked filesystem used to decode event file handles.
-/// `map` is empty when decoded paths are already real paths; for a detached
-/// btrfs top-level mount it translates subvolume paths to their mountpoints.
-pub(super) struct Source {
-    root: File,
-    map: Vec<(PathBuf, PathBuf)>,
-}
-pub(super) type Handles = HashMap<[u8; 8], Vec<Source>>;
+pub(super) const MASK: u64 = libc::FAN_MODIFY
+    | libc::FAN_ATTRIB
+    | libc::FAN_CLOSE_WRITE
+    | libc::FAN_CREATE
+    | libc::FAN_DELETE
+    | libc::FAN_MOVED_FROM
+    | libc::FAN_MOVED_TO
+    | libc::FAN_ONDIR;
 
-struct Mount {
-    root: PathBuf,
-    point: PathBuf,
-    fstype: String,
-    source: String,
+/// How event file handles of one marked filesystem are decoded.
+enum Source {
+    /// Ordinary filesystem: decode through a current mountpoint, opened per
+    /// event so that Disko never keeps a mount busy (`umount` keeps working).
+    Mounted { points: Vec<PathBuf> },
+    /// Btrfs: decode through a private detached top-level mount and translate
+    /// subvolume paths to where each subvolume is mounted.
+    Detached {
+        root: File,
+        map: Vec<(PathBuf, PathBuf)>,
+    },
 }
 
-pub(super) fn mark(
-    fd: i32,
-    roots: &[PathBuf],
-    excludes: &[PathBuf],
-) -> Result<(Handles, HashSet<u64>)> {
-    let mounts = mountinfo(&std::fs::read_to_string("/proc/self/mountinfo")?);
-    let mut paths = roots.to_vec();
-    for m in &mounts {
-        if roots.iter().any(|r| m.point.starts_with(r))
-            && !excludes.iter().any(|p| m.point.starts_with(p))
-        {
-            paths.push(m.point.clone());
-        }
-    }
-    paths.sort();
-    paths.dedup();
-    let mut handles = Handles::new();
-    let mut devices = HashSet::new();
-    let mut btrfs = BTreeSet::new();
-    let mask = libc::FAN_MODIFY
-        | libc::FAN_ATTRIB
-        | libc::FAN_CLOSE_WRITE
-        | libc::FAN_CREATE
-        | libc::FAN_DELETE
-        | libc::FAN_MOVED_FROM
-        | libc::FAN_MOVED_TO
-        | libc::FAN_ONDIR;
-    for path in paths {
-        if path.components().any(|c| c.as_os_str() == ".snapshots") {
-            continue;
-        }
-        let Ok(file) = File::open(&path) else {
-            continue;
+struct Marked {
+    fsid: [u8; 8],
+    source: Source,
+}
+
+/// Marked filesystems by mount group, refreshed whenever the mount table changes.
+#[derive(Default)]
+pub(super) struct Sources {
+    marked: HashMap<String, Marked>,
+}
+
+impl Sources {
+    /// Mark filesystems that newly appeared below the roots, update decoding
+    /// for moved or removed mounts, and return the device IDs now covered.
+    pub(super) fn refresh(
+        &mut self,
+        fd: i32,
+        mounts: &[Mount],
+        roots: &[PathBuf],
+        excludes: &[PathBuf],
+    ) -> HashSet<u64> {
+        let wanted = |p: &Path| {
+            !excludes.iter().any(|e| p.starts_with(e))
+                && !p.components().any(|c| c.as_os_str() == ".snapshots")
         };
-        let Ok(metadata) = file.metadata() else {
-            continue;
-        };
-        if !metadata.is_dir() {
-            continue;
-        }
-        let name = CString::new(path.as_os_str().as_bytes())?;
-        if unsafe {
-            libc::fanotify_mark(
-                fd,
-                libc::FAN_MARK_ADD | libc::FAN_MARK_FILESYSTEM,
-                mask,
-                libc::AT_FDCWD,
-                name.as_ptr(),
-            )
-        } != 0
-        {
-            // btrfs refuses filesystem marks on subvolumes other than the top level.
-            if io::Error::last_os_error().raw_os_error() == Some(libc::EXDEV)
-                && let Some(m) = containing(&mounts, &path)
-                && m.fstype == "btrfs"
-            {
-                btrfs.insert(m.source.clone());
+        // Mounts below a root, plus the mount holding each root itself.
+        let mut candidates: Vec<(&Mount, PathBuf)> = mounts
+            .iter()
+            .filter(|m| roots.iter().any(|r| m.point.starts_with(r)) && wanted(&m.point))
+            .map(|m| (m, m.point.clone()))
+            .collect();
+        for root in roots {
+            if let Some(m) = containing(mounts, root) {
+                candidates.push((m, root.clone()));
             }
-            continue;
         }
-        let Some(fsid) = fsid(&file) else {
-            continue;
-        };
-        handles.entry(fsid).or_default().push(Source {
-            root: file,
-            map: Vec::new(),
-        });
-        devices.insert(metadata.dev());
-    }
-    for source in btrfs {
-        let root = match whole_btrfs(fd, &source, mask) {
-            Ok(root) => root,
-            Err(e) => {
-                eprintln!("fanotify: btrfs {source}: {e}; using directory inotify watches there");
+        for (m, path) in candidates {
+            let group = m.group();
+            if self.marked.contains_key(&group) || m.fstype == "overlay" {
                 continue;
             }
-        };
-        let Some(fsid) = fsid(&root) else {
-            continue;
-        };
-        let map: Vec<_> = mounts
-            .iter()
-            .filter(|m| m.fstype == "btrfs" && m.source == source)
-            .map(|m| (m.root.clone(), m.point.clone()))
-            .collect();
-        for (_, point) in &map {
-            if let Ok(m) = std::fs::metadata(point) {
-                devices.insert(m.dev());
+            match mark(fd, &path, m) {
+                Ok(Some(marked)) => {
+                    self.marked.insert(group, marked);
+                }
+                Ok(None) => {}
+                Err(e) => eprintln!(
+                    "fanotify: {}: {e}; using directory inotify watches there",
+                    path.display()
+                ),
             }
         }
-        handles.entry(fsid).or_default().push(Source { root, map });
+        let mut devices = HashSet::new();
+        self.marked.retain(|group, marked| {
+            let members: Vec<_> = mounts.iter().filter(|m| &m.group() == group).collect();
+            if members.is_empty() {
+                return false; // Unmounted: the kernel drops the mark with the superblock.
+            }
+            for m in &members {
+                if let Ok(md) = std::fs::metadata(&m.point) {
+                    devices.insert(md.dev());
+                }
+            }
+            match &mut marked.source {
+                Source::Mounted { points } => {
+                    *points = members.iter().map(|m| m.point.clone()).collect();
+                    points.sort_by_key(|p| p.as_os_str().len());
+                }
+                Source::Detached { map, .. } => {
+                    *map = members
+                        .iter()
+                        .map(|m| (m.root.clone(), m.point.clone()))
+                        .collect();
+                }
+            }
+            true
+        });
+        devices
     }
-    Ok((handles, devices))
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.marked.is_empty()
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.marked.len()
+    }
+
+    pub(super) fn resolve(&self, fsid: [u8; 8], handle: &[u8]) -> Option<PathBuf> {
+        // Copy into aligned storage before passing the variable-size file_handle to libc.
+        let mut aligned = vec![0_u64; handle.len().div_ceil(8)];
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                handle.as_ptr(),
+                aligned.as_mut_ptr().cast::<u8>(),
+                handle.len(),
+            );
+        }
+        for marked in self.marked.values().filter(|m| m.fsid == fsid) {
+            match &marked.source {
+                Source::Mounted { points } => {
+                    for point in points {
+                        let Ok(dir) = File::open(point) else {
+                            continue;
+                        };
+                        if let Some(path) = decode(&dir, &mut aligned) {
+                            return Some(path);
+                        }
+                    }
+                }
+                Source::Detached { root, map } => {
+                    if let Some(path) = decode(root, &mut aligned) {
+                        return translate(map, &path);
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+fn decode(dir: &File, handle: &mut [u64]) -> Option<PathBuf> {
+    let raw = unsafe {
+        libc::open_by_handle_at(
+            dir.as_raw_fd(),
+            handle.as_mut_ptr().cast(),
+            libc::O_PATH | libc::O_CLOEXEC,
+        )
+    };
+    if raw < 0 {
+        return None;
+    }
+    let fd = unsafe { OwnedFd::from_raw_fd(raw) };
+    let path = std::fs::read_link(format!("/proc/self/fd/{}", fd.as_raw_fd())).ok()?;
+    (path.is_absolute() && !path.as_os_str().as_bytes().ends_with(b" (deleted)")).then_some(path)
+}
+
+/// Place a filesystem-wide mark. `Ok(None)` means the filesystem cannot be
+/// marked (unsupported or unprivileged) and inotify remains the fallback.
+fn mark(fd: i32, path: &Path, m: &Mount) -> Result<Option<Marked>> {
+    let Ok(file) = File::open(path) else {
+        return Ok(None);
+    };
+    if !file.metadata().is_ok_and(|md| md.is_dir()) {
+        return Ok(None);
+    }
+    let name = CString::new(path.as_os_str().as_bytes())?;
+    if unsafe {
+        libc::fanotify_mark(
+            fd,
+            libc::FAN_MARK_ADD | libc::FAN_MARK_FILESYSTEM,
+            MASK,
+            libc::AT_FDCWD,
+            name.as_ptr(),
+        )
+    } == 0
+    {
+        let Some(fsid) = fsid(&file) else {
+            return Ok(None);
+        };
+        return Ok(Some(Marked {
+            fsid,
+            source: Source::Mounted {
+                points: vec![m.point.clone()],
+            },
+        }));
+    }
+    // Btrfs refuses filesystem marks on subvolumes other than the top level.
+    if io::Error::last_os_error().raw_os_error() != Some(libc::EXDEV) || m.fstype != "btrfs" {
+        return Ok(None);
+    }
+    let root = whole_btrfs(fd, &m.source)?;
+    let Some(fsid) = fsid(&root) else {
+        return Ok(None);
+    };
+    Ok(Some(Marked {
+        fsid,
+        source: Source::Detached {
+            root,
+            map: Vec::new(),
+        },
+    }))
 }
 
 /// Mark a whole btrfs filesystem through a private, read-only, detached mount
 /// of its top-level subvolume. Nothing is attached to the mount tree; the mount
 /// lives exactly as long as the returned directory handle.
-fn whole_btrfs(fd: i32, source: &str, mask: u64) -> Result<File> {
+fn whole_btrfs(fd: i32, source: &str) -> Result<File> {
     const FSOPEN_CLOEXEC: libc::c_uint = 1;
     const FSCONFIG_SET_STRING: libc::c_uint = 1;
     const FSCONFIG_CMD_CREATE: libc::c_uint = 6;
@@ -203,7 +296,7 @@ fn whole_btrfs(fd: i32, source: &str, mask: u64) -> Result<File> {
         libc::fanotify_mark(
             fd,
             libc::FAN_MARK_ADD | libc::FAN_MARK_FILESYSTEM,
-            mask,
+            MASK,
             root.as_raw_fd(),
             c".".as_ptr(),
         )
@@ -225,61 +318,6 @@ fn fsid(file: &File) -> Option<[u8; 8]> {
         .ok()
 }
 
-fn mountinfo(text: &str) -> Vec<Mount> {
-    text.lines()
-        .filter_map(|line| {
-            let fields: Vec<_> = line.split_whitespace().collect();
-            let split = fields.iter().position(|s| *s == "-")?;
-            if split < 5 || fields.len() < split + 3 {
-                return None;
-            }
-            Some(Mount {
-                root: unescape(fields[3]),
-                point: unescape(fields[4]),
-                fstype: fields[split + 1].to_owned(),
-                source: unescape(fields[split + 2]).to_string_lossy().into_owned(),
-            })
-        })
-        .collect()
-}
-
-/// mountinfo escapes space, tab, newline and backslash as three-digit octal.
-fn unescape(field: &str) -> PathBuf {
-    let bytes = field.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'\\'
-            && i + 3 < bytes.len()
-            && bytes[i + 1..i + 4]
-                .iter()
-                .all(|b| (b'0'..=b'7').contains(b))
-        {
-            out.push(
-                (bytes[i + 1] - b'0') * 64 + (bytes[i + 2] - b'0') * 8 + (bytes[i + 3] - b'0'),
-            );
-            i += 4;
-        } else {
-            out.push(bytes[i]);
-            i += 1;
-        }
-    }
-    PathBuf::from(OsString::from_vec(out))
-}
-
-/// The topmost mount whose mountpoint contains `path`.
-fn containing<'a>(mounts: &'a [Mount], path: &Path) -> Option<&'a Mount> {
-    let mut best: Option<&Mount> = None;
-    for m in mounts {
-        if path.starts_with(&m.point)
-            && best.is_none_or(|b| m.point.as_os_str().len() >= b.point.as_os_str().len())
-        {
-            best = Some(m);
-        }
-    }
-    best
-}
-
 /// Map a path inside the filesystem to where it is mounted, preferring the
 /// most specific subvolume.
 fn translate(map: &[(PathBuf, PathBuf)], path: &Path) -> Option<PathBuf> {
@@ -292,84 +330,15 @@ fn translate(map: &[(PathBuf, PathBuf)], path: &Path) -> Option<PathBuf> {
         .map(|(_, p)| p)
 }
 
-pub(super) fn resolve(handles: &Handles, fsid: [u8; 8], handle: &[u8]) -> Option<PathBuf> {
-    // Copy into aligned storage before passing the variable-size file_handle to libc.
-    let mut aligned = vec![0_u64; handle.len().div_ceil(8)];
-    unsafe {
-        std::ptr::copy_nonoverlapping(
-            handle.as_ptr(),
-            aligned.as_mut_ptr().cast::<u8>(),
-            handle.len(),
-        );
-    }
-    for source in handles.get(&fsid)? {
-        let raw = unsafe {
-            libc::open_by_handle_at(
-                source.root.as_raw_fd(),
-                aligned.as_mut_ptr().cast(),
-                libc::O_PATH | libc::O_CLOEXEC,
-            )
-        };
-        if raw < 0 {
-            continue;
-        }
-        let fd = unsafe { OwnedFd::from_raw_fd(raw) };
-        let Ok(path) = std::fs::read_link(format!("/proc/self/fd/{}", fd.as_raw_fd())) else {
-            continue;
-        };
-        if !path.is_absolute() || path.as_os_str().as_bytes().ends_with(b" (deleted)") {
-            continue;
-        }
-        if source.map.is_empty() {
-            return Some(path);
-        }
-        if let Some(path) = translate(&source.map, &path) {
-            return Some(path);
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const SAMPLE: &str = "\
-23 1 0:31 /@ / rw,relatime shared:1 - btrfs /dev/mapper/root rw,subvolid=256,subvol=/@
-45 23 0:30 /@home /home rw,relatime shared:2 - btrfs /dev/mapper/root rw,subvolid=257,subvol=/@home
-46 23 0:57 /@log /var/log rw,relatime shared:3 - btrfs /dev/mapper/root rw,subvolid=258,subvol=/@log
-47 23 259:2 / /mnt/my\\040disk rw,relatime shared:4 - ext4 /dev/nvme0n1p2 rw";
-
     #[test]
-    fn parses_mountinfo_with_escapes() {
-        let mounts = mountinfo(SAMPLE);
-        assert_eq!(mounts.len(), 4);
-        assert_eq!(mounts[1].root, Path::new("/@home"));
-        assert_eq!(mounts[1].point, Path::new("/home"));
-        assert_eq!(mounts[3].point, Path::new("/mnt/my disk"));
-        assert_eq!(mounts[3].fstype, "ext4");
-        assert_eq!(mounts[0].source, "/dev/mapper/root");
-        assert_eq!(unescape("a\\134b\\011c"), Path::new("a\\b\tc"));
-        assert_eq!(unescape("trailing\\04"), Path::new("trailing\\04"));
-    }
-
-    #[test]
-    fn finds_containing_mount_and_translates_subvolumes() {
-        let mounts = mountinfo(SAMPLE);
-        assert_eq!(
-            containing(&mounts, Path::new("/home/user/x"))
-                .unwrap()
-                .point,
-            Path::new("/home")
-        );
-        assert_eq!(
-            containing(&mounts, Path::new("/var/lib")).unwrap().point,
-            Path::new("/")
-        );
-        let map: Vec<_> = mounts
+    fn translates_subvolume_paths_to_mountpoints() {
+        let map: Vec<_> = [("/@", "/"), ("/@home", "/home"), ("/@log", "/var/log")]
             .iter()
-            .filter(|m| m.fstype == "btrfs")
-            .map(|m| (m.root.clone(), m.point.clone()))
+            .map(|(r, p)| (PathBuf::from(r), PathBuf::from(p)))
             .collect();
         let t = |p: &str| translate(&map, Path::new(p));
         assert_eq!(t("/@home/user/x").unwrap(), Path::new("/home/user/x"));

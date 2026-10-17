@@ -1,4 +1,4 @@
-use super::mounts::{Handles, resolve};
+use super::mounts::Sources;
 use crate::index::absolute;
 use std::{
     os::unix::ffi::OsStrExt,
@@ -11,7 +11,7 @@ use std::{
 
 pub(super) fn events(
     buffer: &[u8],
-    handles: &Handles,
+    sources: &Sources,
     roots: &[PathBuf],
     excludes: &[PathBuf],
     sender: &SyncSender<notify::Result<notify::Event>>,
@@ -55,7 +55,7 @@ pub(super) fn events(
                 let name_start = record + 20 + handle_size;
                 if name_start < record + size
                     && handle_size <= 128
-                    && let Some(parent) = resolve(handles, fsid, &buffer[record + 12..name_start])
+                    && let Some(parent) = sources.resolve(fsid, &buffer[record + 12..name_start])
                 {
                     let name = &buffer[name_start..record + size];
                     let end = name.iter().position(|b| *b == 0).unwrap_or(name.len());

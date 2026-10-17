@@ -2,6 +2,44 @@
 
 All notable changes to Disko are recorded here. Versions follow Semantic Versioning.
 
+## [0.2.0] - 2026-10-17
+
+### Added
+
+- Per-filesystem space accounting in `status`, `/api/roots` and the dashboard:
+  used, indexed, and space no indexed path accounts for (mostly snapshots).
+- Mounts and unmounts while running are picked up within two seconds: new
+  filesystems are marked for fanotify and changed mountpoints are resynced.
+- Exclusions can change on an existing index; newly excluded trees are pruned.
+- Full scans wait while less than 1 GiB is free for the index.
+- `tests/mounts_linux.py`: root-only mount, bind, Btrfs subvolume and deletion
+  boundary checks on loop images.
+
+### Fixed
+
+- Disko held a descriptor on every marked mountpoint, so `umount` failed while it ran.
+- Btrfs subvolumes appeared as separate disks, summing capacity several times.
+- Overlay and relocated bind mounts were counted twice.
+- A full pending-event queue forced a rescan of every root; entries now merge
+  into recursive parent resyncs.
+- Deletion could enter a nested Btrfs subvolume and could stop half way at the
+  depth limit; the whole tree is now checked before anything is removed.
+- Startup scans recorded a stale reason from the previous run.
+- Directory removal scanned every watched path and cleared the parent cache.
+
+### Changed
+
+- Reconciliation runs daily instead of every six hours.
+- Dashboard reworked for legibility: proportional type with monospace only for
+  paths and figures, plain-language labels, page titles that match navigation,
+  and no decorative chrome.
+- Overview leads with a per-disk space ledger (in the index, not in the index,
+  reserved, free) that opens the disk tree; scans show progress, speed and time
+  left; recent changes show names with start-truncated folders and relative times.
+- Explorer shows size and last modified instead of type, file count and uid;
+  history shows plain reasons and no longer reports zero entries for scans that
+  did not finish; delete confirmations name the action.
+
 ## [0.1.2] - 2026-10-17
 
 ### Fixed
@@ -65,3 +103,5 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
 [0.1.1]: https://github.com/olibuijr/disko/releases/tag/v0.1.1
 
 [0.1.2]: https://github.com/olibuijr/disko/releases/tag/v0.1.2
+
+[0.2.0]: https://github.com/olibuijr/disko/releases/tag/v0.2.0

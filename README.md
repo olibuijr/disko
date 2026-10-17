@@ -1,7 +1,7 @@
 # Disko 🪩
 
 [![CI](https://github.com/olibuijr/disko/actions/workflows/ci.yml/badge.svg)](https://github.com/olibuijr/disko/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.1.2-78944a)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-78944a)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **A Rust filesystem indexing daemon for fast disk-space queries and live metadata.**
@@ -147,7 +147,9 @@ The binary is `/usr/local/bin/disko`; database, history and password hash live i
 
 The service indexes `/`, including mounted disks and Btrfs subvolumes. It excludes
 `/proc`, `/sys`, `/dev`, `/run`, its own state directory, and `.snapshots`
-directories. USB disks under `/run/media` are therefore excluded. Symlinks are
+directories. USB disks under `/run/media` are therefore excluded. Exclusions can be
+changed on an existing index; roots cannot. Overlay mounts and relocated bind
+mounts are not descended, so nothing is counted twice. Symlinks are
 recorded without following them; file contents are never read by the indexer.
 
 Allocated bytes are `st_blocks × 512`. Totals count paths, including each hardlink.

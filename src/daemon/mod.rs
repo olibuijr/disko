@@ -1,7 +1,7 @@
 use crate::{
     cli::{Cli, ScanArgs},
     index::*,
-    web,
+    mounts, web,
 };
 use anyhow::{Context, Result, bail};
 use fs2::FileExt;
@@ -14,7 +14,7 @@ use serde_json::json;
 use std::{
     collections::HashMap,
     fs::OpenOptions,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -52,6 +52,16 @@ pub fn writer(cli: &Cli, s: &ScanArgs, watch: Option<WatchOptions>) -> Result<()
     }
 }
 
+/// Below this much free space on the database's filesystem, full scans wait;
+/// a scan that hits a full disk fails and costs a restart plus a rescan.
+const MIN_FREE_BYTES: u64 = 1 << 30;
+
+fn low_space(db: &Path) -> bool {
+    db.parent()
+        .and_then(|p| fs2::available_space(p).ok())
+        .is_some_and(|free| free < MIN_FREE_BYTES)
+}
+
 fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> {
     let stop = idx.stop.clone();
     let rescan = Arc::new(AtomicBool::new(false));
@@ -64,17 +74,24 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
             Some(rescan.clone()),
         )?;
     }
+    let mut table = mounts::read();
+    idx.set_skip(mounts::duplicates(&table))?;
     let overflow = Arc::new(AtomicBool::new(false));
     let (tx, rx) = mpsc::sync_channel::<notify::Result<Event>>(65536);
+    let mut fan = None;
     if watch.is_some() {
         match fanotify::start(
             idx.roots.clone(),
             idx.excludes.clone(),
+            &table,
             tx.clone(),
             overflow.clone(),
             stop.clone(),
         ) {
-            Ok(devices) => idx.filesystem_devices = devices,
+            Ok((f, devices)) => {
+                idx.filesystem_devices = devices;
+                fan = Some(f);
+            }
             Err(e) => eprintln!("fanotify unavailable ({e}); using directory inotify watches"),
         }
         let overflow = overflow.clone();
@@ -98,33 +115,58 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
         overflow.clone(),
         stop.clone(),
     );
-    idx.reconcile()?;
     let Some(options) = watch else {
+        set_meta(&idx.c, "recovery_reason", "one-shot scan")?;
+        idx.reconcile()?;
         set_meta(&idx.c, "pid", 0)?;
         return Ok(());
     };
     let (interval, debounce) = (options.interval, options.debounce);
     let mut last_scan = Instant::now();
     let mut last_health = Instant::now();
+    let mut last_mounts = Instant::now();
+    let mut due = true; // The startup reconciliation.
+    let mut waiting = false;
+    let mut started = false;
     while !stop.load(Ordering::Relaxed) {
         let requested = rescan.swap(false, Ordering::Relaxed);
-        if requested
+        due |= requested
             || overflow.swap(false, Ordering::Relaxed)
-            || (interval > 0 && last_scan.elapsed() >= Duration::from_secs(interval))
-        {
-            set_meta(
-                &idx.c,
-                "recovery_reason",
-                if requested {
-                    "dashboard request"
-                } else {
-                    "event overflow, watcher error, or scheduled reconciliation"
-                },
-            )?;
+            || (interval > 0 && last_scan.elapsed() >= Duration::from_secs(interval));
+        if due && low_space(&db) {
+            if !waiting {
+                eprintln!(
+                    "less than {} MiB free for the index; full scan postponed",
+                    MIN_FREE_BYTES >> 20
+                );
+                set_meta(&idx.c, "state", "waiting for disk space")?;
+                idx.commit()?;
+                waiting = true;
+            }
+        } else if due {
+            let reason = if !started {
+                "startup"
+            } else if requested {
+                "dashboard request"
+            } else {
+                "event overflow, watcher error, or scheduled reconciliation"
+            };
+            set_meta(&idx.c, "recovery_reason", reason)?;
+            started = true;
+            waiting = false;
+            due = false;
             idx.reconcile()?;
             last_scan = Instant::now();
         }
         std::thread::sleep(Duration::from_millis(debounce.clamp(10, 2000)));
+        if last_mounts.elapsed() >= Duration::from_secs(2) {
+            last_mounts = Instant::now();
+            let current = mounts::read();
+            if current != table {
+                remount(idx, fan.as_ref(), &table, &current)?;
+                table = current;
+            }
+        }
         let mut pending = queue.take();
         if !pending.is_empty() {
             let mut paths: Vec<_> = pending.drain().collect();
@@ -139,15 +181,7 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
                 }
                 idx.sync(&path, recursive)?;
                 idx.update_hardlinks(&path)?;
-                use std::os::unix::ffi::OsStrExt;
-                idx.c.execute(
-                    "INSERT INTO activity(ts,path,kind) VALUES(?1,?2,?3)",
-                    params![
-                        now(),
-                        path.as_os_str().as_bytes(),
-                        if recursive { "subtree" } else { "metadata" }
-                    ],
-                )?;
+                activity(idx, &path, if recursive { "subtree" } else { "metadata" })?;
                 if recursive {
                     recursive_parent = Some(path);
                 }
@@ -165,4 +199,48 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
     set_meta(&idx.c, "pid", 0)?;
     idx.commit()?;
     Ok(())
+}
+
+fn activity(idx: &Index, path: &Path, kind: &str) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    idx.c.execute(
+        "INSERT INTO activity(ts,path,kind) VALUES(?1,?2,?3)",
+        params![now(), path.as_os_str().as_bytes(), kind],
+    )?;
+    Ok(())
+}
+
+/// Something was mounted or unmounted: mark new filesystems, update skipped
+/// duplicates, and resync each changed mountpoint, which now shows either the
+/// new filesystem or the directory underneath.
+fn remount(
+    idx: &mut Index,
+    fan: Option<&fanotify::Fanotify>,
+    before: &[mounts::Mount],
+    after: &[mounts::Mount],
+) -> Result<()> {
+    if let Some(fan) = fan {
+        idx.filesystem_devices = fan.refresh(after);
+    }
+    idx.set_skip(mounts::duplicates(after))?;
+    let changed: Vec<(PathBuf, &str)> = after
+        .iter()
+        .filter(|m| !before.iter().any(|b| b.id == m.id))
+        .map(|m| (m.point.clone(), "mount"))
+        .chain(
+            before
+                .iter()
+                .filter(|b| !after.iter().any(|m| m.id == b.id))
+                .map(|b| (b.point.clone(), "unmount")),
+        )
+        .collect();
+    for (point, kind) in changed {
+        if !idx.relevant(&point) {
+            continue;
+        }
+        idx.forget_watches(&point);
+        idx.sync(&point, true)?;
+        activity(idx, &point, kind)?;
+    }
+    idx.commit()
 }

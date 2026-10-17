@@ -337,3 +337,52 @@ fn watch_stops_cleanly_on_sigterm_while_idle_and_mid_scan() {
     wait(|| fresh.exists() && state(&fresh).contains("\"scanning\""));
     sigterm_exits_cleanly(&mut child, &fresh);
 }
+
+#[test]
+fn exclusions_change_in_place_without_a_new_index() {
+    let (_t, root, db) = setup();
+    fs::create_dir_all(root.join("keep")).unwrap();
+    fs::write(root.join("keep/a"), [1; 100]).unwrap();
+    fs::create_dir_all(root.join("cache/deep")).unwrap();
+    fs::write(root.join("cache/deep/b"), [1; 900]).unwrap();
+    scan(&db, &root);
+    assert_eq!(
+        run(&db, &["info", root.to_str().unwrap()])["apparent_bytes"],
+        1000
+    );
+    let excluded = root.join("cache");
+    let out = Command::new(env!("CARGO_BIN_EXE_disko"))
+        .arg("--db")
+        .arg(&db)
+        .arg("scan")
+        .arg(&root)
+        .arg("--exclude")
+        .arg(&excluded)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let info = run(&db, &["info", root.to_str().unwrap()]);
+    assert_eq!(info["apparent_bytes"], 100);
+    assert_eq!(info["files"], 1);
+    scan(&db, &root); // Dropping the exclusion indexes the tree again.
+    assert_eq!(
+        run(&db, &["info", root.to_str().unwrap()])["apparent_bytes"],
+        1000
+    );
+    let other = root.join("keep");
+    let out = Command::new(env!("CARGO_BIN_EXE_disko"))
+        .arg("--db")
+        .arg(&db)
+        .arg("scan")
+        .arg(&other)
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "changing roots must still be refused"
+    );
+}

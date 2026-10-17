@@ -9,7 +9,7 @@ Global options: `--db PATH` (or `DISKO_DB`) and `--json`.
 | `watch --no-web` | Index and watch without HTTP |
 | `watch --listen ADDRESS:PORT` | Choose dashboard listener; default `0.0.0.0:7331` |
 | `watch --password-file PATH` | Choose a password hash file |
-| `watch --reconcile-secs N` | Periodic reconciliation; default 21600, zero disables |
+| `watch --reconcile-secs N` | Periodic reconciliation; default 86400 (daily), zero disables |
 | `watch --debounce-ms N` | Event coalescing window; default 250, maximum 2000 |
 | `serve [--listen ADDRESS:PORT]` | Read-only dashboard; default `127.0.0.1:7331` |
 | `password [--password-file PATH]` | Hash a password read from stdin |

@@ -96,27 +96,42 @@ impl Index {
             if id == 1 {
                 bail!("refusing to remove the index root");
             }
-            if kind == 1 && self.watcher.is_some() {
+            if kind == 1 && !self.watched.is_empty() {
                 let path = path_of(&self.c, id)?;
-                let paths: Vec<_> = self
-                    .watched
-                    .iter()
-                    .filter(|p| p.starts_with(&path))
-                    .cloned()
-                    .collect();
-                for p in paths {
-                    if let Some(w) = &mut self.watcher {
-                        let _ = w.unwatch(&p);
-                    }
-                    self.watched.remove(&p);
+                self.forget_watches(&path);
+            }
+            if kind == 1 {
+                // Drop exactly the cached parents of removed directories; row IDs
+                // can be reused, so stale entries would misroute later deltas.
+                let dirs = self.c.prepare_cached("WITH RECURSIVE subtree(id,kind) AS (SELECT id,kind FROM nodes WHERE id=?1 UNION ALL SELECT n.id,n.kind FROM nodes n JOIN subtree s ON n.parent=s.id WHERE s.kind=1) SELECT id FROM subtree WHERE kind=1")?.query_map([id], |r| r.get::<_, i64>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+                for dir in dirs {
+                    self.parents.remove(&dir);
                 }
             }
             self.c.prepare_cached("WITH RECURSIVE subtree(id) AS (SELECT ?1 UNION ALL SELECT n.id FROM nodes n JOIN subtree s ON n.parent=s.id) DELETE FROM nodes WHERE id IN (SELECT id FROM subtree)")?.execute([id])?;
-            if kind == 1 {
-                self.parents.clear();
-            }
             self.ancestors(parent, d)?;
             self.dirty += 1;
+        }
+        Ok(())
+    }
+
+    /// Drop a path and everything below it from the index, if present.
+    pub fn forget_path(&mut self, p: &Path) -> Result<()> {
+        match resolve(&self.c, p)? {
+            Some(id) if id != 1 => self.remove(id),
+            _ => Ok(()),
+        }
+    }
+
+    /// Remove every entry below a directory but keep the directory itself.
+    pub fn prune_children(&mut self, id: i64) -> Result<()> {
+        let children = self
+            .c
+            .prepare_cached("SELECT id FROM nodes WHERE parent=?1")?
+            .query_map([id], |r| r.get::<_, i64>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for child in children {
+            self.remove(child)?;
         }
         Ok(())
     }

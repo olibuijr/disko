@@ -2,6 +2,7 @@ mod cli;
 mod daemon;
 mod deletion;
 mod index;
+mod mounts;
 mod queries;
 mod web;
 use anyhow::Result;

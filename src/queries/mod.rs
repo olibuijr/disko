@@ -10,11 +10,13 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
 };
+mod disks;
 mod largest;
 mod metadata;
 mod output;
 mod sql;
 mod status;
+pub use disks::filesystems;
 pub use largest::largest_under;
 pub use metadata::{node, required};
 use output::{print_rows, rows};

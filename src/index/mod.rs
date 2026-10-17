@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rusqlite::{Connection, OptionalExtension, params};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     ffi::{OsStr, OsString},
     fs,
     os::unix::{
@@ -47,7 +47,10 @@ pub struct Index {
     pub visited: u64,
     pub errors: u64,
     pub watch_errors: u64,
-    pub watched: HashSet<PathBuf>,
+    /// Ordered so a directory's watched descendants form one contiguous range.
+    pub watched: BTreeSet<PathBuf>,
+    /// Mountpoints recorded but not descended (overlays, relocated binds).
+    pub skip: HashSet<PathBuf>,
     pub excludes: Vec<PathBuf>,
     pub roots: Vec<PathBuf>,
     filter: std::sync::Arc<walk::Filter>,
@@ -79,7 +82,8 @@ impl Index {
             visited: 0,
             errors: 0,
             watch_errors: 0,
-            watched: HashSet::new(),
+            watched: BTreeSet::new(),
+            skip: HashSet::new(),
             excludes,
             roots,
             filter,
@@ -99,7 +103,42 @@ impl Index {
     }
 
     pub fn relevant(&self, p: &Path) -> bool {
-        !self.excluded(p) && self.roots.iter().any(|r| p.starts_with(r))
+        !self.excluded(p)
+            && self.roots.iter().any(|r| p.starts_with(r))
+            && !self.skip.iter().any(|s| p != s && p.starts_with(s))
+    }
+
+    /// Paths in `watched` at or below `dir`.
+    pub(super) fn watched_under(&self, dir: &Path) -> Vec<PathBuf> {
+        self.watched
+            .range(dir.to_owned()..)
+            .take_while(|p| p.starts_with(dir))
+            .cloned()
+            .collect()
+    }
+
+    /// Forget watches below a mountpoint that was mounted or unmounted; the
+    /// kernel already dropped them, so a later sweep must be free to re-add.
+    pub fn forget_watches(&mut self, dir: &Path) {
+        for p in self.watched_under(dir) {
+            if let Some(w) = &mut self.watcher {
+                let _ = w.unwatch(&p);
+            }
+            self.watched.remove(&p);
+        }
+    }
+
+    /// Replace the skipped-mount set, emptying newly skipped mountpoints.
+    pub fn set_skip(&mut self, skip: HashSet<PathBuf>) -> Result<()> {
+        let added: Vec<_> = skip.difference(&self.skip).cloned().collect();
+        self.skip = skip;
+        for point in added {
+            if let Some(id) = resolve(&self.c, &point)? {
+                self.prune_children(id)?;
+            }
+            self.forget_watches(&point);
+        }
+        Ok(())
     }
 
     pub(super) fn error(&mut self, p: &Path, e: &dyn std::fmt::Display) {

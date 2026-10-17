@@ -29,7 +29,9 @@ export function treePage(container) {
   const crumbs = el('div', 'breadcrumbs');
   crumbs.setAttribute('aria-label', 'Folder breadcrumbs');
   const total = el('span', 'tree-total');
-  header.append(crumbs, total);
+  const headerRight = el('div', 'tree-header-right');
+  headerRight.append(total);
+  header.append(crumbs, headerRight);
   const body = el('div', 'tree-body');
   const map = el('div', 'treemap');
   map.setAttribute('role', 'group');
@@ -43,7 +45,7 @@ export function treePage(container) {
   const zoomIn = zoomBtn('+', 'Zoom in', () => setZoom(view.z * 1.25));
   const zoomReset = zoomBtn('⤾', 'Reset pan and zoom', resetView);
   zoomBar.append(zoomOut, zoomLevel, zoomIn, zoomReset);
-  map.append(zoomBar);
+  headerRight.append(zoomBar);
   const view = { z: 1, x: 0, y: 0 };
   function applyView() {
     canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.z})`;
@@ -96,7 +98,7 @@ export function treePage(container) {
   });
   const rank = el('div', 'tree-rank');
   const rankHead = el('div', 'rank-head');
-  rankHead.append(el('strong', '', 'Largest in this folder'), el('span', 'rank-count', ''));
+  rankHead.append(el('strong', '', 'Largest here'), el('span', 'rank-count', ''));
   const rankList = el('ol', 'rank-list');
   rank.append(rankHead, rankList);
   body.append(map, rank);
@@ -106,10 +108,10 @@ export function treePage(container) {
     const item = el('span'), chip = el('i'); chip.style.background = color;
     item.append(chip, document.createTextNode(label)); legend.append(item);
   }
-  foot.append(legend, el('span', '', 'Drag to pan · Scroll to zoom · Double-click to zoom · Click a folder to explore'));
+  foot.append(legend, el('span', '', 'Click a folder to open it. Scroll or double-click to zoom, drag to pan.'));
   card.append(header, body, foot);
   const detail = el('div');
-  container.replaceChildren(toolbar, card, el('p', 'tree-note', 'Path-based totals. Shared blocks, snapshots and filesystem overhead can differ from disk capacity. Zero-size entries have no area.'), detail);
+  container.replaceChildren(toolbar, card, el('p', 'tree-note', 'Sizes add up the files below each folder. Snapshots, shared blocks and filesystem overhead are not included, so totals can differ from what the disk reports.'), detail);
   function draw() {
     if (!data || !alive) return;
     const kids = [...data.children].sort((a, b) => metric(b) - metric(a));
@@ -119,7 +121,7 @@ export function treePage(container) {
     if (rest > 0) nodes.push({ node: null, weight: rest, index: -1 });
     canvas.replaceChildren();
     canvas.style.width = `${map.clientWidth}px`; canvas.style.height = `${map.clientHeight}px`;
-    if (!nodes.length) { canvas.append(empty('No allocated space in this folder. Try Apparent to see sparse files.')); return; }
+    if (!nodes.length) { canvas.append(empty('Nothing here takes space on disk. Switch to File size to see sparse files.')); return; }
     const totalWeight = sum + rest;
     const boxes = treemap(nodes, map.clientWidth, map.clientHeight);
     for (const box of boxes) {
@@ -150,7 +152,7 @@ export function treePage(container) {
     clampView(); applyView();
     rankList.replaceChildren();
     const ranked = kids.filter(n => metric(n) > 0).slice(0, 30);
-    rankHead.querySelector('.rank-count').textContent = `${ranked.length} shown · ${bytes(totalWeight)} total`;
+    rankHead.querySelector('.rank-count').textContent = `${bytes(totalWeight)} in total`;
     for (const node of ranked) {
       const w = metric(node), pct = w / totalWeight * 100;
       const li = el('li', 'rank-row');
@@ -186,7 +188,7 @@ export function treePage(container) {
       crumbs.replaceChildren();
       for (const [i, ancestor] of data.ancestors.entries()) {
         if (i) crumbs.append(el('span', '', '/'));
-        crumbs.append(button(ancestor.path === '/' ? '◫ Root' : basename(ancestor.path), () => {
+        crumbs.append(button(ancestor.path === '/' ? 'All disks' : basename(ancestor.path), () => {
           state.treeId = ancestor.id; load();
         }, ''));
       }

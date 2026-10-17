@@ -24,7 +24,7 @@ pub enum Command {
     Watch {
         #[command(flatten)]
         scan: ScanArgs,
-        #[arg(long, default_value_t = 21600)]
+        #[arg(long, default_value_t = 86400)]
         reconcile_secs: u64,
         #[arg(long, default_value_t = 250)]
         debounce_ms: u64,

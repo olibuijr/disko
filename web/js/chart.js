@@ -23,7 +23,8 @@ export function chart(samples) {
     add('polygon', { points: `0,140 ${xy} 800,140`, class: 'chart-fill' });
     add('polyline', { points: xy, class: 'chart-line' });
   }
+  const peak = Math.max(0, ...points.map(point => point.speed));
   const labels = el('div', 'chart-labels');
-  labels.append(el('span', '', points.length ? stamp(points[0].ts) : 'Waiting for samples'), el('span', '', 'entries / sec'), el('span', '', points.length ? stamp(points.at(-1).ts) : ''));
+  labels.append(el('span', '', points.length ? stamp(points[0].ts) : 'No samples yet'), el('span', '', peak ? `Peak ${Math.round(peak).toLocaleString()} per second` : ''), el('span', '', points.length ? stamp(points.at(-1).ts) : ''));
   wrap.append(svg, labels); return wrap;
 }

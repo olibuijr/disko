@@ -1,9 +1,9 @@
-import { el, button, bytes, count, basename } from './dom.js';
+import { el, button, bytes, count, basename, ago, ltr } from './dom.js';
 import { api, state, metric, navigate } from './api.js';
 
 export function metricToggle(onChange) {
   const node = el('div', 'segmented');
-  for (const [value, label] of [['allocated', 'Allocated'], ['apparent', 'Apparent']]) {
+  for (const [value, label] of [['allocated', 'Space on disk'], ['apparent', 'File size']]) {
     const item = button(label, () => {
       state.metric = value;
       for (const child of node.children) child.classList.toggle('active', child === item);
@@ -32,14 +32,14 @@ export function rootDropdown(onChange) {
   const close = () => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
   const label = item => {
     const copy = el('div', 'dropdown-copy');
-    copy.append(el('strong', '', item.name || item.path));
-    copy.append(el('small', '', item.capacity ? `${bytes(item.available)} free of ${bytes(item.capacity)} · ${item.filesystem}` : `${item.path} · persistent metadata index`));
+    copy.append(el('strong', '', item.capacity ? item.name : item.path === '/' ? 'All disks' : item.path));
+    copy.append(el('small', '', item.capacity ? `${bytes(item.available)} free of ${bytes(item.capacity)}` : item.path === '/' ? 'Every indexed disk' : item.path));
     return copy;
   };
   const update = () => {
     trigger.replaceChildren(el('span', 'drive-icon', '▤'), label(state.root), el('span', 'dropdown-chevron', '⌄'));
     menu.replaceChildren();
-    for (const [key, title] of [['indexes', 'INDEXES'], ['disks', 'DISKS']]) {
+    for (const [key, title] of [['indexes', 'Everything'], ['disks', 'One disk']]) {
       if (!state.roots[key].length) continue;
       menu.append(el('div', 'dropdown-section', title));
       for (const item of state.roots[key]) {
@@ -79,25 +79,31 @@ export function rootDropdown(onChange) {
   return node;
 }
 
-export function fileTable(nodes, onFile) {
+export function fileTable(nodes, onFile, folders = false) {
   const wrap = el('div', 'table-wrap');
-  if (!nodes.length) { wrap.append(el('div', 'empty', 'No indexed entries here yet.')); return wrap; }
+  if (!nodes.length) { wrap.append(el('div', 'empty', 'Nothing indexed here yet.')); return wrap; }
   const table = el('table');
   const head = el('thead'), row = el('tr');
-  for (const text of ['NAME / LOCATION', 'TYPE', 'SPACE', 'FILES', 'OWNER']) row.append(el('th', '', text));
+  const columns = [['Name', ''], [state.metric === 'apparent' ? 'File size' : 'Space on disk', ''], folders ? ['Files', 'right hide-narrow'] : ['Modified', 'hide-narrow']];
+  for (const [text, cls] of columns) row.append(el('th', cls, text));
   head.append(row); table.append(head);
   const body = el('tbody');
   const max = Math.max(...nodes.map(metric), 1);
   for (const item of nodes) {
     const tr = el('tr'), path = el('td', 'path-cell');
-    const link = button('', () => item.kind === 'directory' ? navigate('tree', item.id) : onFile?.(item), '');
-    link.append(el('strong', '', `${item.kind === 'directory' ? '▱' : '·'}  ${basename(item.path)}`), el('small', 'mono', item.path));
+    const folder = item.kind === 'directory';
+    const link = button('', () => folder ? navigate('tree', item.id) : onFile?.(item), '');
+    link.title = folder ? `Open ${item.path} in the disk tree` : `Details for ${item.path}`;
+    const name = el('strong');
+    if (folder) name.append(el('span', 'kind-icon', '▱'));
+    name.append(document.createTextNode(basename(item.path)));
+    link.append(name, el('small', 'mono', ltr(item.path)));
     path.append(link);
     const size = el('td', 'row-size', bytes(metric(item)));
     const bar = el('div', 'row-bar'), fill = el('span');
     fill.style.width = `${Math.max(metric(item) / max * 100, .5)}%`;
     bar.append(fill); size.append(bar);
-    tr.append(path, el('td', 'muted', item.kind), size, el('td', 'mono muted', count(item.files)), el('td', 'mono muted', String(item.uid)));
+    tr.append(path, size, folders ? el('td', 'num right muted hide-narrow', count(item.files)) : el('td', 'when hide-narrow', ago(item.mtime)));
     body.append(tr);
   }
   table.append(body); wrap.append(table); return wrap;

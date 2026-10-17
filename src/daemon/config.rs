@@ -50,24 +50,47 @@ pub(super) fn prepare(cli: &Cli, s: &ScanArgs) -> Result<(Index, std::fs::File, 
     signal_hook::flag::register(signal_hook::consts::SIGTERM, stop.clone())?;
     signal_hook::flag::register(signal_hook::consts::SIGINT, stop.clone())?;
     let c = open(&db, true)?;
-    // Changing coverage in an existing database could leave misleading old totals.
-    let coverage = serde_json::to_string(&json!({"roots":roots,"excludes":excludes}))?;
-    let previous: Option<String> = c
+    // Roots define the tree; changing them needs a fresh index. Exclusions can
+    // change in place: newly excluded trees are pruned below, and newly
+    // included ones are picked up by the startup scan.
+    let coverage = json!({"roots":roots,"excludes":excludes});
+    let previous: Option<serde_json::Value> = c
         .query_row("SELECT value FROM meta WHERE key='coverage'", [], |r| {
-            r.get(0)
+            r.get::<_, String>(0)
         })
-        .ok();
-    if previous.as_ref().is_some_and(|v| v != &coverage) {
-        bail!(
-            "coverage differs from the existing index; use a new --db path to change roots/exclusions"
-        );
+        .ok()
+        .and_then(|v| serde_json::from_str(&v).ok());
+    let mut pruned = Vec::new();
+    if let Some(previous) = previous {
+        if previous["roots"] != coverage["roots"] {
+            bail!(
+                "index roots differ from the existing index; use a new --db path to change roots"
+            );
+        }
+        let before: Vec<PathBuf> =
+            serde_json::from_value(previous["excludes"].clone()).unwrap_or_default();
+        pruned = excludes
+            .iter()
+            .filter(|e| !before.iter().any(|b| e.starts_with(b)))
+            .cloned()
+            .collect();
+        if before != excludes {
+            eprintln!(
+                "coverage: exclusions changed; pruning {} newly excluded trees",
+                pruned.len()
+            );
+        }
     }
-    set_meta(&c, "coverage", coverage)?;
     set_meta(&c, "pid", std::process::id())?;
     c.execute(
         "UPDATE scans SET finished=?1,state='interrupted' WHERE finished IS NULL",
         [now()],
     )?;
-    let idx = Index::new(c, roots, excludes, stop.clone(), s.jobs)?;
+    let mut idx = Index::new(c, roots, excludes, stop.clone(), s.jobs)?;
+    for path in pruned {
+        idx.forget_path(&path)?;
+    }
+    set_meta(&idx.c, "coverage", coverage.to_string())?;
+    idx.commit()?;
     Ok((idx, lock, db))
 }

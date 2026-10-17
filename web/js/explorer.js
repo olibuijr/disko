@@ -17,9 +17,9 @@ export function explorerPage(container) {
     }, value === kind ? 'active' : ''); types.append(item);
   }
   toolbar.append(group, types);
-  const search = el('label', 'search-box'); search.append(el('span', '', '⌕'));
-  const input = el('input'); input.type = 'search'; input.placeholder = 'Find a filename by prefix…'; input.setAttribute('aria-label', 'Search filename prefixes'); search.append(input);
-  const results = card('Largest files', 'From the cached index; no filesystem walk.', search);
+  const search = el('label', 'search-box'); search.append(el('span', '', '⌕')); search.querySelector('span').setAttribute('aria-hidden', 'true');
+  const input = el('input'); input.type = 'search'; input.placeholder = 'Search names that start with…'; input.setAttribute('aria-label', 'Search by the start of a file or folder name'); search.append(input);
+  const results = card('Largest files', 'Select a file for details, or a folder to open it in the disk tree.', search);
   const table = el('div'), detail = el('div'); results.append(table);
   container.replaceChildren(toolbar, results, detail);
   input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 250); });
@@ -34,8 +34,8 @@ export function explorerPage(container) {
       const text = input.value.trim();
       const rows = await api(text ? 'find' : 'largest', text ? { q: text, limit: 100 } : { id: state.root.id, kind, metric: state.metric, limit: 100 });
       if (!alive || sequence !== request) return;
-      results.querySelector('h2').textContent = text ? 'Search results' : `Largest ${kind === 'files' ? 'files' : 'folders'}`;
-      table.replaceChildren(fileTable(rows, inspect));
+      results.querySelector('h2').textContent = text ? `Names starting with “${text}”` : `Largest ${kind === 'files' ? 'files' : 'folders'}`;
+      table.replaceChildren(fileTable(rows, inspect, !text && kind === 'dirs'));
     } catch (error) { if (alive) table.replaceChildren(empty(error.message)); }
   }
   load();

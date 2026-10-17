@@ -61,6 +61,13 @@ Btrfs is covered through a detached top-level mount, which this ext4 fixture
 does not exercise; check it by running `disko watch` as root on a scratch tree
 below a Btrfs subvolume and confirming `watch_backend` and zero `watch_errors`.
 
+Mount behaviour (mount and unmount while running, bind mounts, a Btrfs subvolume
+watched through the top-level mark, and deletion refusing a nested subvolume):
+
+```sh
+sudo env DISKO_BIN="$PWD/target/release/disko" python3 tests/mounts_linux.py
+```
+
 ## Releases
 
 Update `Cargo.toml`, `VERSION`, `CHANGELOG.md` and the README version badge together.
