@@ -3,7 +3,7 @@
 # Disko
 
 [![CI](https://github.com/olibuijr/disko/actions/workflows/ci.yml/badge.svg)](https://github.com/olibuijr/disko/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.5.0-78944a)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.1-78944a)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **A Rust filesystem indexing daemon for fast disk-space queries and live metadata.**

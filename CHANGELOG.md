@@ -2,7 +2,7 @@
 
 All notable changes to Disko are recorded here. Versions follow Semantic Versioning.
 
-## [Unreleased]
+## [0.5.1] - 2026-11-24
 
 ### Fixed
 
