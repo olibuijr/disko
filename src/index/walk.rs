@@ -97,6 +97,9 @@ pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResu
         // differ, below. Never treated as complete, so nothing is pruned.
         r.complete = false;
         for name in names {
+            if stop.load(Ordering::Relaxed) {
+                return r;
+            }
             match fs::symlink_metadata(job.path.join(name)) {
                 Ok(m) => r.children.push((name.clone(), m)),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

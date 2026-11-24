@@ -5,7 +5,10 @@ use super::*;
 /// restart it, and the scan resumes from its saved frontier.
 const STALL: i64 = 15 * 60;
 /// After SIGTERM, give the writer this long to commit and exit on its own.
-const STOP_GRACE: Duration = Duration::from_secs(20);
+/// Well inside the unit's TimeoutStopSec, so systemd never needs SIGKILL.
+const STOP_GRACE: Duration = Duration::from_secs(10);
+/// How often the watchdog looks; short so a stop is noticed promptly.
+const TICK: Duration = Duration::from_millis(500);
 
 pub(super) fn start(stop: Arc<AtomicBool>) {
     progress();
@@ -14,7 +17,7 @@ pub(super) fn start(stop: Arc<AtomicBool>) {
         .spawn(move || {
             let mut stopping: Option<Instant> = None;
             loop {
-                std::thread::sleep(Duration::from_secs(2));
+                std::thread::sleep(TICK);
                 let phase = PHASE.lock().map(|p| *p).unwrap_or("unknown");
                 if stop.load(Ordering::Relaxed) {
                     let since = *stopping.get_or_insert_with(Instant::now);
@@ -32,4 +35,28 @@ pub(super) fn start(stop: Arc<AtomicBool>) {
             }
         })
         .expect("watchdog thread");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The forced exit must land well before systemd's SIGKILL, with room for
+    /// the process to tear down after it.
+    #[test]
+    fn stop_grace_fits_inside_the_service_stop_timeout() {
+        let unit = include_str!("../../disko.service");
+        let timeout: u64 = unit
+            .lines()
+            .find_map(|l| l.strip_prefix("TimeoutStopSec="))
+            .expect("TimeoutStopSec in disko.service")
+            .trim()
+            .parse()
+            .expect("TimeoutStopSec in seconds");
+        let forced_exit = STOP_GRACE + TICK * 2;
+        assert!(
+            forced_exit * 4 <= Duration::from_secs(timeout),
+            "grace {forced_exit:?} vs TimeoutStopSec={timeout}"
+        );
+    }
 }

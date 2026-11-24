@@ -135,6 +135,11 @@ impl Index {
         })
     }
 
+    /// SIGTERM or SIGINT arrived: long loops return as soon as they see it.
+    pub(crate) fn stopping(&self) -> bool {
+        self.stop.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     pub fn excluded(&self, p: &Path) -> bool {
         self.filter.excluded(p)
     }
@@ -155,8 +160,18 @@ impl Index {
 impl Drop for Index {
     fn drop(&mut self) {
         let _ = self.commit();
-        let _ = self
-            .c
-            .execute_batch("COMMIT; PRAGMA wal_checkpoint(PASSIVE)");
+        let _ = self.c.execute_batch("COMMIT");
+        if self.stopping() {
+            // A checkpoint copies the WAL into the database and fsyncs it; under
+            // the service's I/O weight that outlasted systemd's stop timeout.
+            // The WAL is durable and the next start folds it back, so skip both
+            // this one and the one SQLite runs when the connection closes.
+            let _ = self.c.set_db_config(
+                rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+                true,
+            );
+        } else {
+            let _ = self.c.execute_batch("PRAGMA wal_checkpoint(PASSIVE)");
+        }
     }
 }

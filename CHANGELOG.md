@@ -10,6 +10,10 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
   parent and reading it) no longer counts as a metadata error or logs one.
 - A folder removed before its inotify watch was added no longer counts as a
   watch error, which kept `disko health` at `warn` until the next restart.
+- Stopping the daemon during a deep scan no longer runs into systemd's
+  SIGKILL: the writer stops inside a large folder instead of after it, the
+  WAL checkpoint is skipped on a stop, the forced exit comes after 10 s instead
+  of 20 s, and the unit allows 60 s (`TimeoutStopSec`).
 
 ## [0.5.0] - 2026-11-24
 

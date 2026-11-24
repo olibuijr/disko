@@ -79,6 +79,9 @@ impl Index {
     /// Best effort: a busy or failed checkpoint must not stop the daemon.
     pub fn checkpoint(&mut self) -> Result<()> {
         self.commit()?;
+        if self.stopping() {
+            return Ok(()); // It can wait for readers and I/O; never delay a stop.
+        }
         self.c.execute_batch("COMMIT")?;
         let _ = self
             .c
