@@ -16,6 +16,10 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
   of 20 s, and the unit allows 60 s (`TimeoutStopSec`).
 - The service restarts after any exit (`Restart=always`), so a SIGTERM or
   SIGINT not sent by systemd no longer leaves the daemon down.
+- The service no longer swaps (`MemorySwapMax=0`). Scan memory peaks are
+  the kernel's dentry and inode cache charged to the service, so at
+  `MemoryHigh` the kernel now drops that cache instead of swapping out the
+  daemon's working set (about 110 MB).
 
 ## [0.5.0] - 2026-11-24
 

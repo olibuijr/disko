@@ -29,8 +29,16 @@ IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 IOWeight=10
 OOMScoreAdjust=1000
+# Most of what is charged here is not the process (174 MB peak RSS over a
+# 12M-entry index) but the kernel's dentry and inode cache from walking every
+# folder, which grows to any limit: of a 1.07 GB peak, 644 MB was reclaimable
+# slab and 110 MB anonymous memory. MemoryHigh caps that cache so an indexer
+# does not crowd out other work, and dropping it is cheap. With no swap the
+# kernel drops that cache at the cap instead of swapping out the daemon's
+# small working set, which then had to page back in to scan or stop.
 MemoryHigh=1G
 MemoryMax=2G
+MemorySwapMax=0
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=false
