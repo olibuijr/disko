@@ -1,0 +1,1 @@
+The files in this folder come from tasteskill (https://github.com/Leonxlnx/taste-skill), MIT licence, used unchanged. The brand icons in icons/ are from Simple Icons (CC0) and remain trademarks of their owners.

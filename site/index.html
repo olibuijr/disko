@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en" data-type="software" data-radius="sharp" data-ground="sky" data-buttons="pill" data-motion>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Disko: a live disk-usage index for Linux servers</title>
+<meta name="description" content="Disko keeps the size of every folder in a SQLite index and updates it from kernel file events, so disk-usage questions answer in milliseconds. Free and MIT-licensed.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Disko: a live disk-usage index for Linux servers">
+<meta property="og:description" content="Every folder's size, kept current from kernel file events. Free and MIT-licensed.">
+<meta property="og:image" content="https://olibuijr.github.io/disko/share.jpg">
+<meta property="og:url" content="https://olibuijr.github.io/disko/">
+<link rel="canonical" href="https://olibuijr.github.io/disko/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#eef0f3">
+<meta name="site-kind" content="software">
+<meta name="page-type" content="software">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400..700&family=Figtree:wght@400..600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/system.css">
+<link rel="stylesheet" href="assets/ui/cards.css">
+<link rel="stylesheet" href="assets/motion/motion.css">
+<link rel="stylesheet" href="assets/backgrounds/backgrounds.css">
+<link rel="stylesheet" href="assets/layout/layout.css">
+<link rel="stylesheet" href="assets/icons/icon.css">
+<!-- <html lang="en" data-radius="sharp">; keep this <style> after the links: layout.css resets --ly-scale -->
+<style>
+:root {
+  --p-bg: #eef0f3; --p-surface: #e2e5ea; --p-ink: #0b0c0e; --p-muted: #5d6470;
+  --p-accent: #1f2de6; --p-accent-ink: #ffffff; --p-action: #1f2de6; --p-action-ink: #ffffff;
+  --p-inv-bg: #0b0c0e; --p-inv-surface: #17181a; --p-inv-ink: #eef0f3; --p-inv-muted: #8e8f92;
+  --p-inv-accent: #eef0f3; --p-inv-accent-ink: #0b0c0e; --p-inv-action: #eef0f3; --p-inv-action-ink: #0b0c0e;
+  --font-display: "Gabarito", system-ui, sans-serif;
+  --font-text: "Figtree", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display-weight: 400;
+  --display-tracking: -0.03em;
+  --display-tracking-xl: -0.04em;
+  --ly-scale: 0.98;
+}
+</style>
+<link rel="stylesheet" href="assets/ui/base.css">
+<link rel="stylesheet" href="assets/ui/window/fragment.css">
+<link rel="stylesheet" href="assets/ui/terminal-run/fragment.css">
+<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
+<script src="assets/backgrounds/backgrounds.js"></script>
+<script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>
+<link rel="modulepreload" href="assets/moments/moments.js">
+<link rel="modulepreload" href="assets/moments/lib.js">
+<link rel="modulepreload" href="assets/moments/liquid-type/moment.js">
+<link rel="stylesheet" href="assets/moments/liquid-type/moment.css">
+<style>
+  .nav__logo img { width: 28px; height: 28px; }
+  /* hero collage pieces: sized in % of the collage, text in container units */
+  .ly-collage { container-type: inline-size; }
+  .ly-collage .ly-piece { box-shadow: 0 1px 2px rgb(11 12 14 / .08), 0 22px 48px -22px rgb(11 12 14 / .35); background: #fff; color: var(--p-ink); }
+  .pc { padding: 3.4cqw; display: grid; align-content: start; gap: 1.8cqw; font: 400 max(13px, 2cqw)/1.35 var(--font-text); }
+  .pc .lbl { color: var(--p-muted); font: 500 max(13px, 1.8cqw)/1.2 var(--font-text); }
+  .pc .ln { display: flex; justify-content: space-between; gap: 2cqw; padding-top: 1.4cqw; border-top: 1px solid #e6e8ec; }
+  .pc .ln span:last-child { font-family: var(--font-mono); white-space: nowrap; }
+  .pc .bar { height: 1.4cqw; background: #e2e5ea; position: relative; }
+  .pc .bar i { position: absolute; inset: 0 auto 0 0; background: var(--p-accent); }
+  .pc-term { background: #0b0c0e !important; color: #eef0f3 !important; font: 400 max(13px, 1.9cqw)/1.55 var(--font-mono); padding: 3.4cqw; display: grid; align-content: start; white-space: pre; }
+  .pc-term .p { color: #8e9bff; } .pc-term .m { color: #8e8f92; }
+  .pc-map { padding: 0; }
+  .dk-map { position: absolute; inset: 0; }
+  .dk-tile { position: absolute; box-shadow: inset 0 0 0 1.5px #fff; padding: 8px 10px; display: grid; align-content: start; gap: 2px; overflow: hidden; font: 400 13px/1.25 var(--font-text); }
+  .dk-tile b { font-weight: 500; font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dk-tile span { opacity: .8; font-family: var(--font-mono); white-space: nowrap; }
+  .dk-tile--c { background: var(--p-accent); color: #fff; }
+  .dk-tile--k { background: #17181a; color: #eef0f3; }
+  .dk-tile--g { background: #c9ced6; color: #0b0c0e; }
+  .dk-tile--h { background: #dde1e7; color: #0b0c0e; }
+  .ly-collage .dk-tile { padding: 1.6cqw 2cqw; font-size: max(13px, 1.9cqw); }
+
+  /* the app frame (sections-library.md, app-frame) */
+  .app.ui { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); margin-top: var(--s-7); background: var(--u-bg); border: 1px solid var(--u-border); border-radius: var(--u-r); box-shadow: var(--u-shadow); }
+  .app > .app__pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  .app > .app__pane + .app__pane { border-left: 1px solid var(--u-line); }
+  .app > .app__pane > .ui-panel { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
+  .app > .app__pane--list::after { content: ""; position: absolute; inset: auto 0 0 0; height: 64px; background: linear-gradient(transparent, var(--u-bg)); pointer-events: none; }
+  @media (min-width: 1024px) and (max-width: 1279px) { .app.ui { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); } }
+  @media (max-width: 1023px) {
+    .app.ui { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+    .app > .app__pane--list { max-height: 252px; }
+    .app > .app__pane--list::after { display: none; }
+    .app .ui-win__side { display: none; }
+    .app .ui-win__body { grid-template-columns: minmax(0, 1fr); }
+    .app > .app__pane + .app__pane { border-left: 0; border-top: 1px solid var(--u-line); }
+  }
+  @media (max-width: 639px) {
+    .app.ui { grid-template-rows: minmax(0, 1fr); }
+    .app > .app__pane--list { display: none; }
+    .app > .app__pane + .app__pane { border-top: 0; }
+  }
+  .dk-tree { display: grid; grid-template-rows: auto auto 1fr; height: 100%; }
+  .dk-tree__bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--u-line); font: 400 13px/1.2 var(--font-mono); }
+  .dk-tree__bar i { font-style: normal; color: var(--p-muted); }
+  .dk-tree__seg { margin-left: auto; display: flex; border: 1px solid var(--u-line); font: 500 13px/1 var(--font-text); }
+  .dk-tree__seg span { padding: 6px 10px; } .dk-tree__seg span:first-child { background: var(--p-ink); color: #fff; }
+  .dk-tree__sum { padding: 10px 16px; font: 400 13px/1.3 var(--font-text); color: var(--p-muted); }
+  .dk-tree__map { position: relative; margin: 0 16px 16px; }
+
+  /* feature panels */
+  #live .panel { --p-h: 300px; }
+  #live .panel > .ui-panel, #install .panel > .ui-panel { height: 100%; }
+  .dk-code { font-size: 14px; line-height: 1.8; padding: 20px 22px; }
+  .dk-feed li { padding: 12px 16px; font-size: 14px; }
+  @media (max-width: 639px) { #live .panel { --p-h: 180px; } #install .panel { --p-h: 200px; } }
+  .dk-feed { list-style: none; margin: 0; padding: 0; font: 400 13px/1.3 var(--font-mono); }
+  .dk-feed li { display: grid; grid-template-columns: 80px 1fr auto; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--u-line); }
+  .dk-feed li:first-child { border-top: 0; }
+  .dk-feed em { font-style: normal; font-family: var(--font-text); font-weight: 500; }
+  .dk-feed .add { color: #1a7f4b; } .dk-feed .del { color: #b3261e; } .dk-feed .mv { color: var(--p-accent); }
+  .dk-feed time { color: var(--p-muted); }
+  .dk-feed span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dk-code { margin: 0; padding: 16px 18px; font: 400 13px/1.7 var(--font-mono); white-space: pre; overflow: hidden; }
+  .dk-code .p { color: var(--p-accent); } .dk-code .m { color: var(--p-muted); }
+
+  /* the statement moment */
+  #open > .wrap { display: grid; align-content: center; height: 100%; }
+  #open .mo-lt__type { font-size: clamp(56px, 13vw, 200px); line-height: .98; letter-spacing: var(--display-tracking-xl); margin: 0; }
+  #install .panel { --p-h: 240px; }
+  #faq .panel { --p-h: 300px; }
+  .dk-stack img { width: 40px; height: 40px; object-fit: contain; flex: none; }
+  @media (max-width: 639px) { .ly-collage .dk-tile span { display: none; } }
+  .dk-tile span { overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 1023px) { .dk-tile--s b, .dk-tile--s span { display: none; } }
+  @media (max-width: 639px) { .dk-code { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px 16px; } .dk-feed li { grid-template-columns: 70px 1fr auto; font-size: 12px; } }
+  .dk-stack { list-style: none; padding: 0; margin: var(--s-8) 0 0; }
+  .dk-stack li { display: flex; gap: var(--s-4); align-items: flex-start; padding-top: var(--s-5); border-top: 1px solid rgb(11 12 14 / .14); }
+  .dk-stack li span { display: grid; gap: 4px; }
+  .dk-stack b { font-weight: 500; font-family: var(--font-display); font-size: var(--t-lead); }
+  @media (max-width: 1023px) { .dk-stack li { grid-column: 1 / -1; } }
+</style>
+</head>
+<body>
+<!-- type: software
+     deal: hero triptych, nav nav-mega, close close-type, footer footer-columns, rhythm space, buttons pill, mark: the Disko logo (codex concept, redrawn as SVG), grounds none
+     palette cool-grey-cobalt (a cool, quiet ground and one cobalt accent read as a precise systems tool, like a terminal on a clean desk); type gabarito
+     moments: liquid-type on #open -->
+<header class="nav">
+  <div class="wrap nav__bar">
+    <a class="skip-link" href="#tree">Skip to content</a>
+    <a class="nav__logo" href="#top"><img src="favicon.svg" alt="" width="28" height="28">Disko</a>
+    <nav class="nav__links" aria-label="Main">
+      <div class="nav__item">
+        <a class="nav__link" href="#tree">Product <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <div class="nav__menu">
+          <div class="wrap grid">
+            <div class="menu-col span-3">
+              <p class="t-label">Dashboard</p>
+              <a href="#tree">Disk tree<span>Treemap of any folder</span></a>
+              <a href="#tree">Largest folders<span>Sorted by allocated size</span></a>
+            </div>
+            <div class="menu-col span-3">
+              <p class="t-label">Daemon</p>
+              <a href="#live">Live updates<span>Kernel events, no rescans</span></a>
+              <a href="#install">Command line<span>JSON output and read-only SQL</span></a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="nav__item"><a class="nav__link" href="#live">How it works</a></div>
+      <div class="nav__item"><a class="nav__link" href="#faq">Questions</a></div>
+      <div class="nav__item"><a class="nav__link" href="https://github.com/olibuijr/disko">GitHub</a></div>
+    </nav>
+    <div class="nav__actions">
+      <a class="btn btn--primary" href="#install">Install Disko</a>
+    </div>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--triptych" data-enter aria-labelledby="hero-h">
+    <div class="wrap"><div class="hero-text grid hero__grid">
+      <div class="span-3">
+        <h1 id="hero-h">Disk usage index for Linux servers</h1>
+        <p class="hero__lead">Disko keeps every folder's size in SQLite and updates it from kernel file events, so size queries answer in 1 to 5 ms.</p>
+      </div>
+      <div class="ly-collage span-6 start-4" role="img" aria-label="Disko's treemap of a home folder, its largest-folder list, a terminal running disko du and a feed of file changes">
+        <div class="ly-collage__set is-on">
+          <div class="ly-piece pc-map ui" style="left: 4%; top: 6%; width: 62%; height: 56%"><div class="dk-map">
+                <div class="dk-tile dk-tile--c" style="left:0%;top:0%;width:46%;height:70%"><b>src</b><span>64.2 GiB</span></div><div class="dk-tile dk-tile--k" style="left:46%;top:0%;width:30%;height:52%"><b>.cache</b><span>31.8 GiB</span></div><div class="dk-tile dk-tile--g dk-tile--s" style="left:76%;top:0%;width:24%;height:52%"><b>Videos</b><span>24.5 GiB</span></div><div class="dk-tile dk-tile--h dk-tile--s" style="left:46%;top:52%;width:28%;height:33%"><b>.local</b><span>18.0 GiB</span></div><div class="dk-tile dk-tile--k dk-tile--s" style="left:74%;top:52%;width:26%;height:27%"><b>Downloads</b><span>14.1 GiB</span></div><div class="dk-tile dk-tile--g dk-tile--s" style="left:0%;top:70%;width:26%;height:30%"><b>backups</b><span>12.6 GiB</span></div><div class="dk-tile dk-tile--h dk-tile--s" style="left:26%;top:70%;width:20%;height:30%"><b>.cargo</b><span>8.3 GiB</span></div><div class="dk-tile dk-tile--g dk-tile--s" style="left:46%;top:85%;width:28%;height:15%"><b>Music</b><span>4.0 GiB</span></div><div class="dk-tile dk-tile--h dk-tile--s" style="left:74%;top:79%;width:26%;height:21%"><b>Other</b><span>4.5 GiB</span></div>
+          </div></div>
+          <div class="ly-piece pc" style="left: 50%; top: 50%; width: 46%">
+            <span class="lbl">Largest folders · /home/dev</span>
+            <div class="ln"><span>src/api/target</span><span>14.8 GiB</span></div>
+            <div class="ln"><span>Videos/2026</span><span>11.2 GiB</span></div>
+            <div class="ln"><span>src/ml/.venv</span><span>6.1 GiB</span></div>
+            <div class="ln"><span>Downloads</span><span>5.4 GiB</span></div>
+          </div>
+        </div>
+        <div class="ly-collage__set" aria-hidden="true">
+          <div class="ly-piece pc-term" style="left: 4%; top: 8%; width: 66%; height: 52%"><span><span class="p">$</span> disko du /home/dev</span>
+<span>  64.2 GiB  src</span>
+<span>  31.8 GiB  .cache</span>
+<span>  24.5 GiB  Videos</span>
+<span>  18.0 GiB  .local</span>
+<span>  14.1 GiB  Downloads</span>
+<span class="m">answered in 3 ms from the index</span></div>
+          <div class="ly-piece pc" style="left: 46%; top: 56%; width: 50%">
+            <span class="lbl">Status</span>
+            <div class="ln"><span>Watching</span><span>fanotify</span></div>
+            <div class="ln"><span>Entries</span><span>12,318,655</span></div>
+            <div class="ln"><span>Last scan</span><span>incremental</span></div>
+          </div>
+        </div>
+        <div class="ly-collage__set" aria-hidden="true">
+          <div class="ly-piece pc" style="left: 4%; top: 6%; width: 58%">
+            <span class="lbl">Recent changes</span>
+            <div class="ln"><span>created  build/app.tar</span><span>2 s</span></div>
+            <div class="ln"><span>renamed  photos → archive</span><span>9 s</span></div>
+            <div class="ln"><span>removed  tmp/cache-7f2</span><span>14 s</span></div>
+            <div class="ln"><span>modified  index.db</span><span>21 s</span></div>
+          </div>
+          <div class="ly-piece pc" style="left: 40%; top: 54%; width: 56%">
+            <span class="lbl">Cleanup · build output and caches</span>
+            <div class="ln"><span>target/</span><span>14.8 GiB</span></div>
+            <div class="bar"><i style="width: 88%"></i></div>
+            <div class="ln"><span>node_modules/</span><span>2.1 GiB</span></div>
+            <div class="bar"><i style="width: 13%"></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="span-3 start-10 hero__cta"><a class="btn btn--primary" href="#install">Install Disko</a></div>
+    </div></div>
+  </section>
+
+  <section class="section" id="tree" aria-labelledby="tree-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <h2 id="tree-h" class="span-5">The disk tree and its largest folders</h2>
+        <div class="span-6 start-7 stack-4">
+          <p>Pick a disk and the dashboard draws it as a treemap. Click a folder to go in. The largest folders sit beside it, sorted by space on disk.</p>
+          <a class="link" href="https://github.com/olibuijr/disko#user-guide">Read the user guide</a>
+        </div>
+      </div>
+      <div class="ui app fill" role="img" aria-label="The Disko dashboard: a list of the largest folders beside a treemap of /home/dev" data-ui-pause-host>
+        <div class="app__pane app__pane--list">
+          <div class="ui ui-panel ui-win" data-ui="window">
+            <div class="ui-win__bar">
+              <span class="ui-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="ui-win__crumb"><img loading="lazy" class="ui-brand" src="favicon.svg" alt="" width="14" height="14">Disko <i>/</i> <b>Largest</b></span>
+              <span class="ui-spacer"></span>
+              <span class="ui-win__search" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span class="ui-win__ph">Search</span><span class="ui-kbd">/</span></span>
+            </div>
+            <div class="ui-win__body">
+              <nav class="ui-win__side" aria-hidden="true">
+                <span class="ui-win__nav">Overview</span>
+                <span class="ui-win__nav">Disk tree</span>
+                <span class="ui-win__nav is-on">Largest<em>200</em></span>
+                <span class="ui-win__nav">Cleanup<em>38</em></span>
+                <span class="ui-win__nav">History</span>
+                <span class="ui-win__label">Disks</span>
+                <span class="ui-win__nav"><span class="ui-win__hash">/</span>root</span>
+                <span class="ui-win__nav"><span class="ui-win__hash">/</span>mnt/data</span>
+              </nav>
+              <div class="ui-win__main">
+                <div class="ui-win__cols" aria-hidden="true"><span>Folder</span><span>Path</span><span>Kind</span><span>Size</span></div>
+                <ul class="ui-win__rows">
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="1">RS</span><span class="ui-win__who">target</span><span class="ui-win__sub">~/src/api · Cargo build output</span><span class="ui-win__st is-you" data-st>Cache</span><span class="ui-win__age">14.8 GiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="3">MV</span><span class="ui-win__who">2026</span><span class="ui-win__sub">~/Videos · 212 files</span><span class="ui-win__st" data-st>Folder</span><span class="ui-win__age">11.2 GiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="4">VM</span><span class="ui-win__who">images</span><span class="ui-win__sub">/var/lib/libvirt · 3 disks</span><span class="ui-win__st" data-st>Folder</span><span class="ui-win__age">9.6 GiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="2">PY</span><span class="ui-win__who">.venv</span><span class="ui-win__sub">~/src/ml · Python env</span><span class="ui-win__st is-you" data-st>Cache</span><span class="ui-win__age">6.1 GiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="5">DL</span><span class="ui-win__who">Downloads</span><span class="ui-win__sub">~/Downloads · 1,408 files</span><span class="ui-win__st" data-st>Folder</span><span class="ui-win__age">5.4 GiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="2">JS</span><span class="ui-win__who">node_modules</span><span class="ui-win__sub">~/src/web · 61,220 files</span><span class="ui-win__st is-you" data-st>Cache</span><span class="ui-win__age">2.1 GiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="3">PK</span><span class="ui-win__who">pacman</span><span class="ui-win__sub">/var/cache · 940 packages</span><span class="ui-win__st is-you" data-st>Cache</span><span class="ui-win__age">1.9 GiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="4">LG</span><span class="ui-win__who">journal</span><span class="ui-win__sub">/var/log · systemd</span><span class="ui-win__st" data-st>Folder</span><span class="ui-win__age">1.2 GiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="1">DK</span><span class="ui-win__who">index.db</span><span class="ui-win__sub">/var/lib/disko · SQLite</span><span class="ui-win__st is-done" data-st>File</span><span class="ui-win__age">980 MiB</span></li>
+              <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="5">TH</span><span class="ui-win__who">thumbnails</span><span class="ui-win__sub">~/.cache · 18,330 files</span><span class="ui-win__st is-you" data-st>Cache</span><span class="ui-win__age">610 MiB</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="app__pane app__pane--open">
+          <div class="ui ui-panel dk-tree">
+            <div class="dk-tree__bar"><span>/ <i>›</i> home <i>›</i> dev</span><span class="dk-tree__seg"><span>Allocated</span><span>Apparent</span></span></div>
+            <p class="dk-tree__sum">182 GiB in 1,904,377 entries · indexed 4 s ago</p>
+            <div class="dk-tree__map">
+                <div class="dk-tile dk-tile--c" style="left:0%;top:0%;width:46%;height:70%"><b>src</b><span>64.2 GiB</span></div>
+                <div class="dk-tile dk-tile--k" style="left:46%;top:0%;width:30%;height:52%"><b>.cache</b><span>31.8 GiB</span></div>
+                <div class="dk-tile dk-tile--g dk-tile--s" style="left:76%;top:0%;width:24%;height:52%"><b>Videos</b><span>24.5 GiB</span></div>
+                <div class="dk-tile dk-tile--h dk-tile--s" style="left:46%;top:52%;width:28%;height:33%"><b>.local</b><span>18.0 GiB</span></div>
+                <div class="dk-tile dk-tile--k dk-tile--s" style="left:74%;top:52%;width:26%;height:27%"><b>Downloads</b><span>14.1 GiB</span></div>
+                <div class="dk-tile dk-tile--g dk-tile--s" style="left:0%;top:70%;width:26%;height:30%"><b>backups</b><span>12.6 GiB</span></div>
+                <div class="dk-tile dk-tile--h dk-tile--s" style="left:26%;top:70%;width:20%;height:30%"><b>.cargo</b><span>8.3 GiB</span></div>
+                <div class="dk-tile dk-tile--g dk-tile--s" style="left:46%;top:85%;width:28%;height:15%"><b>Music</b><span>4.0 GiB</span></div>
+                <div class="dk-tile dk-tile--h dk-tile--s" style="left:74%;top:79%;width:26%;height:21%"><b>Other entries</b><span>4.5 GiB</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section g2" id="live" aria-labelledby="live-h">
+    <div class="wrap">
+      <div class="group">
+        <div class="section-head">
+          <h2 id="live-h">The daemon updates live. <span class="muted">The kernel reports each change, so nothing is rescanned.</span></h2>
+        </div>
+        <div class="grid">
+          <article class="card card--row card--open span-6">
+            <h3>Follows every disk change</h3>
+            <p>One fanotify mark covers a whole filesystem, Btrfs subvolumes included.</p>
+            <div class="panel"><div class="ui ui-panel" style="width:100%">
+              <ul class="dk-feed">
+                <li><em class="add">created</em><span>/srv/backups/db-2026-11-24.zst</span><time>2 s</time></li>
+                <li><em class="mv">renamed</em><span>~/photos → ~/archive/photos</span><time>9 s</time></li>
+                <li><em class="del">removed</em><span>/tmp/build-7f2c</span><time>14 s</time></li>
+                <li><em class="add">created</em><span>~/src/api/target/release/api</span><time>31 s</time></li>
+                <li><em class="del">removed</em><span>~/.cache/pip/http</span><time>48 s</time></li>
+                <li><em class="mv">renamed</em><span>/srv/media/inbox → /srv/media/2026</span><time>1 m</time></li>
+              </ul>
+            </div></div>
+          </article>
+          <article class="card card--row card--open span-6">
+            <h3>Rescans only changed folders</h3>
+            <p>Daily scans skip folders whose timestamps match the index; a full check runs weekly.</p>
+            <div class="panel">
+              <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:520px;--ax:max(24px, 50% - 260px);--ay:40px;--ay-sm:16px" data-ui-loop>
+                <div class="ui ui-panel ui-term" data-ui="terminal-run">
+                  <div class="ui-term__head"><span class="ui-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="ui-term__title">server</span><span class="ui-meta">bash</span><span class="ui-spacer"></span></div>
+                  <div class="ui-term__screen" data-term-screen>
+                    <div class="ui-term__track" data-term-track>
+                      <div class="ui-term__ln ui-term__cmd"><span class="ui-term__cwd">~</span><span class="ui-term__sig">$</span><span class="ui-term__typed" data-term-cmd>sudo disko scan --incremental</span></div>
+                      <div class="ui-term__ln ui-term__meter" data-term-out data-term-meter><span class="ui-term__bar" style="--p:1"><i></i></span><span class="ui-term__count" data-term-count>3 of 3 filesystems</span></div>
+                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">/</span><span class="ui-term__n">212 reread</span><span class="ui-term__t">4.1s</span></div>
+                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">/home</span><span class="ui-term__n">1,630 reread</span><span class="ui-term__t">9.8s</span></div>
+                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">/mnt/data</span><span class="ui-term__n">88 reread</span><span class="ui-term__t">2.2s</span></div>
+                      <div class="ui-term__ln ui-term__gap" data-term-out aria-hidden="true"></div>
+                      <div class="ui-term__ln ui-term__sum" data-term-out><span class="ui-term__key">Folders unchanged</span><span class="ui-term__val">410,227 skipped</span></div>
+                      <div class="ui-term__ln ui-term__done" data-term-out data-term-done><span class="ui-term__ok"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 8.3 2.4 2.4 4.6-5"/></svg></span><b>Done</b><span class="ui-term__dim">in 16.1s</span></div>
+                      <div class="ui-term__ln ui-term__cmd" data-term-next><span class="ui-term__cwd">~</span><span class="ui-term__sig">$</span><span class="ui-term__typed"></span><i class="ui-term__caret" aria-hidden="true"></i></div>
+                    </div>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="grid">
+        <article class="card card--row card--open span-6">
+          <h3>Moves renamed folders in one step</h3>
+          <p>On Linux 5.17 and later a rename updates one row, however large the folder.</p>
+          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="m"># fanotify FAN_RENAME</span>
+old  /srv/media/inbox        <span class="m">id 48211</span>
+new  /srv/media/2026         <span class="m">id 48211</span>
+
+<span class="p">UPDATE</span> nodes <span class="p">SET</span> parent = 3907, name = '2026'
+  <span class="p">WHERE</span> id = 48211;      <span class="m">-- 1 row, 31,402 entries moved</span></pre></div></div>
+        </article>
+        <article class="card card--row card--open span-6">
+          <h3>Restarts the daemon when it stalls</h3>
+          <p>A watchdog logs the stuck step and exits after 15 minutes, so systemd resumes the scan.</p>
+          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="m">$ journalctl -u disko</span>
+fanotify covers 6 device IDs on 3 filesystems
+resuming interrupted scan: 5,290 directories pending
+deep scan checked 12,318,655 entries in 3,029s
+<span class="p">watching</span>  0 metadata errors, 0 watch errors</pre></div></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="open" aria-labelledby="open-h">
+    <div class="wrap">
+      <div data-moment="liquid-type" class="section-head" style="max-width:none">
+        <h2 id="open-h" class="mo-lt__type">Disko is open source</h2>
+        <p class="t-lead">MIT licence. Use it, fork it, change it and ship it. Issues and pull requests are welcome.</p>
+        <a class="link" href="https://github.com/olibuijr/disko">See the source on GitHub</a>
+      </div>
+      <ul class="dk-stack grid">
+        <li class="span-4"><img loading="lazy" class="ic ic-40 ic-ink" src="assets/icons/rust.svg" alt="" width="40" height="40"><span><b>Written in Rust</b>One binary, about 5,000 lines of source in files under 200 lines each.</span></li>
+        <li class="span-4"><img loading="lazy" class="ic ic-40" src="assets/icons/sqlite.svg" alt="" width="40" height="40"><span><b>Stored in SQLite</b>One index file you can query with plain SQL.</span></li>
+        <li class="span-4"><img loading="lazy" class="ic ic-40" src="assets/icons/linux.svg" alt="" width="33" height="40"><span><b>Built for Linux</b>fanotify and inotify, with a hardened systemd unit.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="install" style="--hm: 2" aria-labelledby="install-h">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="install-h">Install Disko in 3 steps</h2>
+        <p>Linux with systemd, Rust 1.88 or later and SQLite. The build script installs what is missing on Arch, Debian, Fedora, openSUSE and Alpine.</p>
+      </div>
+      <div class="grid">
+        <article class="card card--row span-4">
+          <span class="step-num">1</span>
+          <h3>Clone the repository</h3>
+          <p>Everything lives in one repository.</p>
+          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="p">$</span> git clone \
+    https://github.com/olibuijr/disko.git
+<span class="p">$</span> cd disko</pre></div></div>
+        </article>
+        <article class="card card--row span-4">
+          <span class="step-num">2</span>
+          <h3>Build and install the service</h3>
+          <p>Runs the tests, installs the binary and starts the daemon.</p>
+          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="p">$</span> ./build.sh --test --install
+<span class="m">Dashboard password: printed once</span>
+<span class="m">Disko is running on port 7331</span></pre></div></div>
+        </article>
+        <article class="card card--row span-4">
+          <span class="step-num">3</span>
+          <h3>Open the dashboard</h3>
+          <p>Or ask the index from a shell.</p>
+          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="m"># http://localhost:7331</span>
+<span class="p">$</span> disko largest --kind dirs
+<span class="p">$</span> disko --json du /srv</pre></div></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="faq" aria-labelledby="faq-h">
+    <div class="wrap">
+      <div class="section-head"><h2 id="faq-h">Questions about Disko</h2></div>
+      <div class="grid grid--top">
+      <div class="faq span-6">
+        <div class="faq__item"><h3>Does Disko read file contents?</h3><p>No. It records names, sizes, owners and timestamps, never file contents, and does not follow symlinks.</p></div>
+        <div class="faq__item"><h3>How much memory does the daemon use?</h3><p>About 90 MB resident while watching an index of 12 million entries, with a 64 MiB SQLite cache.</p></div>
+        <div class="faq__item"><h3>Which Linux systems does it support?</h3><p>Linux. Filesystem-wide watching needs fanotify; older kernels and other setups fall back to inotify.</p></div>
+        <div class="faq__item"><h3>Can I put Disko on the internet?</h3><p>Keep it on a trusted network or behind an HTTPS proxy or SSH tunnel. Passwords are stored as Argon2id hashes.</p></div>
+      </div>
+      <div class="span-6 start-7 stack-4">
+        <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="p">$</span> disko --json info ~/src/api
+{
+  "path": "/home/dev/src/api",
+  "kind": "dir",
+  "allocated": 16012595200,
+  "files": 48211,
+  "entries": 51906,
+  "modified": "2026-11-24T16:02:11Z",
+  "uid": 1000
+}</pre></div></div>
+        <p class="t-small">Every command prints JSON with --json, and disko sql runs read-only queries for scripts and agents.</p>
+      </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer closing" id="contact" aria-labelledby="close-h">
+  <div class="wrap">
+    <div class="closing__cta close--type">
+      <div class="section-head">
+        <h2 id="close-h">Install Disko</h2>
+        <p>Free, MIT-licensed and built in Rust. One command builds, tests and installs it.</p>
+      </div>
+      <a class="btn btn--primary btn--xl btn--wide" href="#install">Install Disko<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+    </div>
+    <div class="closing__links">
+      <div class="grid">
+        <div class="span-4 stack-4">
+          <a class="nav__logo" href="#top"><img loading="lazy" src="favicon.svg" alt="" width="28" height="28">Disko</a>
+          <p class="footer__lede">A live disk-usage index for Linux, with a dashboard and a command line.</p>
+        </div>
+        <div class="span-2 start-7 footer__col"><h3>Product</h3><ul><li><a href="#tree">Disk tree</a></li><li><a href="#live">Live updates</a></li><li><a href="#install">Install</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Docs</h3><ul><li><a href="https://github.com/olibuijr/disko/blob/main/docs/architecture.md">Architecture</a></li><li><a href="https://github.com/olibuijr/disko/blob/main/docs/reference.md">Reference</a></li><li><a href="https://github.com/olibuijr/disko/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Project</h3><ul><li><a href="https://github.com/olibuijr/disko">Source</a></li><li><a href="https://github.com/olibuijr/disko/issues">Issues</a></li><li><a href="https://github.com/olibuijr/disko/blob/main/LICENSE">MIT licence</a></li></ul></div>
+      </div>
+      <div class="footer__legal">
+        <span>&copy; 2026 Disko contributors. Released under the MIT licence.</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script type="module" src="assets/system.js"></script>
+<script type="module" src="assets/motion/motion.js"></script>
+<script type="module" src="assets/layout/layout.js"></script>
+</body>
+</html>

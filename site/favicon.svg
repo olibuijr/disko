@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Disko">
+  <defs><clipPath id="dk-disc"><circle cx="32" cy="32" r="30"/></clipPath></defs>
+  <g clip-path="url(#dk-disc)" stroke="#eef0f3" stroke-width="1.8">
+    <rect x="0" y="0" width="31" height="44" fill="#1f2de6"/>
+    <rect x="0" y="44" width="31" height="20" fill="#c9ced6"/>
+    <rect x="31" y="0" width="33" height="24" fill="#0b0c0e"/>
+    <rect x="31" y="24" width="16" height="16" fill="#c9ced6"/>
+    <rect x="47" y="24" width="17" height="16" fill="#0b0c0e"/>
+    <rect x="31" y="40" width="13" height="24" fill="#0b0c0e"/>
+    <rect x="44" y="40" width="20" height="12" fill="#c9ced6"/>
+    <rect x="44" y="52" width="9" height="12" fill="#0b0c0e"/>
+    <rect x="53" y="52" width="11" height="12" fill="#c9ced6"/>
+  </g>
+</svg>

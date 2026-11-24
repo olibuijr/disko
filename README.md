@@ -1,10 +1,14 @@
-# Disko 🪩
+<img src="site/favicon.svg" alt="" width="72" height="72">
+
+# Disko
 
 [![CI](https://github.com/olibuijr/disko/actions/workflows/ci.yml/badge.svg)](https://github.com/olibuijr/disko/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.3.0-78944a)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-78944a)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **A Rust filesystem indexing daemon for fast disk-space queries and live metadata.**
+
+[Website](https://olibuijr.github.io/disko/) · [Install](#install) · [Contributing](CONTRIBUTING.md)
 
 Disko keeps directory totals in SQLite and updates them from Linux filesystem
 notifications. Its CLI and built-in web dashboard query that index, so checking
@@ -71,7 +75,7 @@ port directly to the internet. See [access and security](docs/security.md).
 The first scan must enumerate the filesystem. While it runs, totals reflect
 completed batches. Progress shows entries processed, elapsed time, current path
 and processing rate; there is no guessed percentage. After scanning, filesystem
-notifications maintain the index. **Reconcile index** requests another full scan.
+notifications maintain the index. **Reconcile index** requests a deep scan. Daily scans are incremental (unchanged folders are not reread) and a deep scan runs weekly.
 
 Watch registration failures, unreadable entries and an offline writer appear as
 health warnings. History records scan outcomes and rate samples. An interrupted
@@ -179,5 +183,7 @@ can require more work.
 Start with [SKILL.md](SKILL.md) for agent instructions and
 [development checks](docs/development.md) for tests. Source files are kept small;
 `tools/check_structure.py` enforces a 200-line limit for application source.
+
+Disko is free and open source: use it, fork it, change it and ship it. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [Changelog](CHANGELOG.md) · [Architecture](docs/architecture.md) · [Security](docs/security.md) · [MIT license](LICENSE)
