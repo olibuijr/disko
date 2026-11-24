@@ -1,4 +1,5 @@
 mod password;
+use super::lock;
 use crate::index::now;
 use anyhow::{Result, bail};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
@@ -37,7 +38,7 @@ impl Auth {
     }
     pub fn login(&self, password: &str, ip: IpAddr) -> Result<Session> {
         {
-            let mut attempts = self.attempts.lock().unwrap();
+            let mut attempts = lock(&self.attempts);
             attempts.retain(|_, (start, _)| now() - *start < 60);
             if attempts.len() >= 1024 && !attempts.contains_key(&ip) {
                 bail!("login rate limit; try again in a minute");
@@ -60,7 +61,7 @@ impl Auth {
             csrf: random_token()?,
             expires: now() + 12 * 3600,
         };
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = lock(&self.sessions);
         sessions.retain(|_, s| s.expires > now());
         if sessions.len() >= 64 {
             bail!("too many active sessions");
@@ -79,7 +80,7 @@ impl Auth {
             .filter_map(|c| c.trim().split_once('='))
             .find(|(k, _)| *k == "disko_session")?
             .1;
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = lock(&self.sessions);
         sessions.retain(|_, s| s.expires > now());
         sessions.get(id).cloned()
     }
@@ -89,6 +90,6 @@ impl Auth {
             .any(|h| h.field.equiv("X-Disko-Token") && h.value.as_str() == session.csrf)
     }
     pub fn logout(&self, session: &Session) {
-        self.sessions.lock().unwrap().remove(&session.id);
+        lock(&self.sessions).remove(&session.id);
     }
 }

@@ -32,9 +32,14 @@ pub fn start(
                     Ok(None) => continue,
                     Err(_) => break,
                 };
-                let reply = match routes::dispatch(&app, &mut request, port) {
-                    Ok(reply) => reply,
-                    Err(e) => Reply::json(400, serde_json::json!({"error":e.to_string()})),
+                // A panic answers this request with 500 instead of ending the
+                // worker; four panics would otherwise take the dashboard down.
+                let reply = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    routes::dispatch(&app, &mut request, port)
+                })) {
+                    Ok(Ok(reply)) => reply,
+                    Ok(Err(e)) => Reply::json(400, serde_json::json!({"error":e.to_string()})),
+                    Err(_) => Reply::json(500, serde_json::json!({"error":"internal error"})),
                 };
                 let mut response =
                     tiny_http::Response::from_string(reply.body).with_status_code(reply.status);

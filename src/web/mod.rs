@@ -10,7 +10,7 @@ use std::{
     collections::HashMap,
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, atomic::AtomicBool},
+    sync::{Arc, Mutex, MutexGuard, PoisonError, atomic::AtomicBool},
 };
 
 #[derive(Clone)]
@@ -18,6 +18,13 @@ pub struct Options {
     pub listen: SocketAddr,
     pub password_file: PathBuf,
 }
+/// Lock web state even if a thread panicked while holding it. The guarded maps
+/// and flags stay valid after any partial update, and an unwrap here would turn
+/// one panic into a panic on every later request.
+pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 pub fn password_path(db: &Path, explicit: Option<&Path>) -> PathBuf {
     explicit
         .map(Path::to_owned)
@@ -52,5 +59,24 @@ impl Reply {
             body: body.into(),
             cookie: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_poisoned_lock_is_recovered() {
+        let m = Arc::new(Mutex::new(1));
+        let held = m.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = held.lock().unwrap();
+            panic!("injected failure");
+        })
+        .join();
+        assert!(m.is_poisoned());
+        *lock(&m) += 1;
+        assert_eq!(*lock(&m), 2);
     }
 }

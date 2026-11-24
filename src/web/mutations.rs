@@ -48,7 +48,7 @@ pub(super) fn handle(
             info["inode"].as_i64().unwrap() as u64,
         )?;
         let token = auth::random_token()?;
-        let mut previews = app.previews.lock().unwrap();
+        let mut previews = lock(&app.previews);
         previews.retain(|_, p| p.expires > now());
         if previews.len() >= 128 {
             bail!("too many pending delete previews");
@@ -69,14 +69,13 @@ pub(super) fn handle(
     let token = body["token"]
         .as_str()
         .context("preview token is required")?;
-    let _guard = app
-        .deleting
-        .try_lock()
-        .map_err(|_| anyhow::anyhow!("another deletion is running"))?;
-    let preview = app
-        .previews
-        .lock()
-        .unwrap()
+    let _guard = match app.deleting.try_lock() {
+        Ok(g) => g,
+        // A deletion that panicked holds nothing any more.
+        Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => bail!("another deletion is running"),
+    };
+    let preview = lock(&app.previews)
         .remove(token)
         .context("preview expired; refresh and try again")?;
     if preview.expires < now() || preview.session != session.id {

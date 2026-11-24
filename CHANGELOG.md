@@ -22,6 +22,9 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
   daemon's working set (about 110 MB).
 - `unindexed` in `disko status` and `/api/roots` is never negative; it read
   below zero when hardlinks (counted once per path) made `indexed` exceed `used`.
+- A panic while computing cleanup suggestions no longer breaks
+  `/api/cleanup` until a restart, and a panic in any dashboard request answers
+  500 instead of ending one of the four web worker threads.
 
 ## [0.5.0] - 2026-11-24
 
