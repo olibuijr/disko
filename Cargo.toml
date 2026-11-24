@@ -10,6 +10,10 @@ keywords = ["filesystem", "disk-usage", "indexer", "daemon", "treemap"]
 categories = ["command-line-utilities", "filesystem"]
 license = "MIT"
 
+[features]
+# Compile SQLite into the binary (used for the static release builds).
+bundled = ["rusqlite/bundled"]
+
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }

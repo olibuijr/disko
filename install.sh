@@ -2,7 +2,7 @@
 set -euo pipefail
 cd -- "$(dirname -- "$0")"
 if (( EUID != 0 )); then
-  echo 'Run cargo build --release, then sudo ./install.sh YOUR_USERNAME' >&2
+  echo 'Run sudo ./install.sh YOUR_USERNAME (from a release folder, or after cargo build --release)' >&2
   exit 1
 fi
 reader="${1:-${SUDO_USER:-}}"
@@ -12,8 +12,11 @@ if [[ -z "$reader" || "$reader" == root ]]; then
 fi
 reader_group="$(id -gn -- "$reader")"
 [[ "$reader_group" =~ ^[a-zA-Z0-9_-]+$ ]]
-test -x target/release/disko
-install -m 0755 target/release/disko /usr/local/bin/disko
+# A release download has the binary beside this script; a source checkout builds it into target/.
+bin=./disko
+[[ -x "$bin" ]] || bin=target/release/disko
+test -x "$bin"
+install -m 0755 "$bin" /usr/local/bin/disko
 install -d -m 0750 -o root -g "$reader_group" /var/lib/disko
 # The index is a rewrite-heavy SQLite file; Btrfs copy-on-write fragments it into
 # hundreds of thousands of extents. NOCOW only applies to files created after it

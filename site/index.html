@@ -8,9 +8,9 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Disko: a live disk-usage index for Linux servers">
 <meta property="og:description" content="Every folder's size, kept current from kernel file events. Free and MIT-licensed.">
-<meta property="og:image" content="https://olibuijr.github.io/disko/share.jpg">
-<meta property="og:url" content="https://olibuijr.github.io/disko/">
-<link rel="canonical" href="https://olibuijr.github.io/disko/">
+<meta property="og:image" content="https://disko.olibuijr.com/share.jpg">
+<meta property="og:url" content="https://disko.olibuijr.com/">
+<link rel="canonical" href="https://disko.olibuijr.com/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#eef0f3">
@@ -123,6 +123,7 @@
   #open > .wrap { display: grid; align-content: center; height: 100%; }
   #open .mo-lt__type { font-size: clamp(56px, 13vw, 200px); line-height: .98; letter-spacing: var(--display-tracking-xl); margin: 0; }
   #install .panel { --p-h: 240px; }
+  #install .dk-code { white-space: pre-wrap; overflow-wrap: anywhere; }
   #faq .panel { --p-h: 300px; }
   .dk-stack img { width: 40px; height: 40px; object-fit: contain; flex: none; }
   @media (max-width: 639px) { .ly-collage .dk-tile span { display: none; } }
@@ -390,24 +391,23 @@ deep scan checked 12,318,655 entries in 3,029s
     <div class="wrap">
       <div class="section-head">
         <h2 id="install-h">Install Disko in 3 steps</h2>
-        <p>Linux with systemd, Rust 1.88 or later and SQLite. The build script installs what is missing on Arch, Debian, Fedora, openSUSE and Alpine.</p>
+        <p>A static binary for x86_64 Linux with systemd, SQLite included. To build from source instead, see the README.</p>
       </div>
       <div class="grid">
         <article class="card card--row span-4">
           <span class="step-num">1</span>
-          <h3>Clone the repository</h3>
-          <p>Everything lives in one repository.</p>
-          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="p">$</span> git clone \
-    https://github.com/olibuijr/disko.git
-<span class="p">$</span> cd disko</pre></div></div>
+          <h3>Download the release</h3>
+          <p>One archive of 2 MB with the binary and its installer.</p>
+          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="p">$</span> curl -LO https://github.com/olibuijr/disko/releases/latest/download/disko-x86_64-linux.tar.gz</pre></div></div>
         </article>
         <article class="card card--row span-4">
           <span class="step-num">2</span>
-          <h3>Build and install the service</h3>
-          <p>Runs the tests, installs the binary and starts the daemon.</p>
-          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="p">$</span> ./build.sh --test --install
-<span class="m">Dashboard password: printed once</span>
-<span class="m">Disko is running on port 7331</span></pre></div></div>
+          <h3>Run the installer</h3>
+          <p>Installs the binary and the service, then starts the daemon.</p>
+          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="p">$</span> tar xzf disko-x86_64-linux.tar.gz
+<span class="p">$</span> cd disko-x86_64-linux
+<span class="p">$</span> sudo ./install.sh "$USER"
+<span class="m">Dashboard password: printed once</span></pre></div></div>
         </article>
         <article class="card card--row span-4">
           <span class="step-num">3</span>
@@ -454,7 +454,7 @@ deep scan checked 12,318,655 entries in 3,029s
     <div class="closing__cta close--type">
       <div class="section-head">
         <h2 id="close-h">Install Disko</h2>
-        <p>Free, MIT-licensed and built in Rust. One command builds, tests and installs it.</p>
+        <p>Free, MIT-licensed and built in Rust. One download and one install command.</p>
       </div>
       <a class="btn btn--primary btn--xl btn--wide" href="#install">Install Disko<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
     </div>

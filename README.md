@@ -8,7 +8,7 @@
 
 **A Rust filesystem indexing daemon for fast disk-space queries and live metadata.**
 
-[Website](https://olibuijr.github.io/disko/) · [Install](#install) · [Contributing](CONTRIBUTING.md)
+[Website](https://disko.olibuijr.com/) · [Install](#install) · [Contributing](CONTRIBUTING.md)
 
 Disko keeps directory totals in SQLite and updates them from Linux filesystem
 notifications. Its CLI and built-in web dashboard query that index, so checking
@@ -26,6 +26,18 @@ large folders does not require walking the filesystem again.
 ![Disk Tree showing a temporary example index](docs/images/disk-tree.png)
 
 ## Install
+
+Download the static x86_64 Linux binary (SQLite included) and run its installer,
+which needs systemd and installs the binary, the service and a random dashboard
+password:
+
+```sh
+curl -LO https://github.com/olibuijr/disko/releases/latest/download/disko-x86_64-linux.tar.gz
+tar xzf disko-x86_64-linux.tar.gz && cd disko-x86_64-linux
+sudo ./install.sh "$USER"
+```
+
+### Build from source
 
 Linux, Rust 1.88+ and SQLite are required. `build.sh` installs missing build
 prerequisites on Arch, Debian/Ubuntu, Fedora, openSUSE and Alpine, and installs
@@ -183,6 +195,8 @@ can require more work.
 Start with [SKILL.md](SKILL.md) for agent instructions and
 [development checks](docs/development.md) for tests. Source files are kept small;
 `tools/check_structure.py` enforces a 200-line limit for application source.
+Maintainers publish a release with `./release.sh`, which builds the static binary
+and uploads it with `gh`.
 
 Disko is free and open source: use it, fork it, change it and ship it. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
