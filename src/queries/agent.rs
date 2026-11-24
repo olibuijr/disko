@@ -87,11 +87,10 @@ pub(super) fn health(c: &Connection, db: &Path, path: Option<&Path>, as_json: bo
     })
 }
 
-/// "last scan: incremental, 2122891 entries in 1262s, no errors"
+/// "incremental scan: 2122891 entries in 1262s, no errors", worded like the
+/// daemon's own log line for a finished scan.
 fn scan_summary(scan: &Value) -> String {
-    let mode = scan["mode"]
-        .as_str()
-        .map_or(String::new(), |m| format!("{m}, "));
+    let mode = scan["mode"].as_str().unwrap_or("last");
     let (errors, watch) = (
         scan["metadata_errors"].as_i64().unwrap_or(0),
         scan["watch_errors"].as_i64().unwrap_or(0),
@@ -103,7 +102,7 @@ fn scan_summary(scan: &Value) -> String {
         (e, w) => format!("{e} metadata errors, {w} watch errors"),
     };
     format!(
-        "last scan: {mode}{} entries in {}s, {problems}",
+        "{mode} scan: {} entries in {}s, {problems}",
         scan["entries"].as_i64().unwrap_or(0),
         scan["seconds"].as_i64().unwrap_or(0)
     )
@@ -166,7 +165,7 @@ mod tests {
         let scan = |e: i64, w: i64| json!({"mode": "incremental", "entries": 2122891, "seconds": 1262, "metadata_errors": e, "watch_errors": w});
         assert_eq!(
             scan_summary(&scan(0, 0)),
-            "last scan: incremental, 2122891 entries in 1262s, no errors"
+            "incremental scan: 2122891 entries in 1262s, no errors"
         );
         assert!(scan_summary(&scan(4, 0)).ends_with(", 4 metadata errors"));
         assert!(scan_summary(&scan(4, 1)).ends_with(", 4 metadata errors, 1 watch errors"));

@@ -57,7 +57,7 @@ fn agent_commands_report_health_schema_and_skill() {
     );
     let text = String::from_utf8(disko(&db, &["health"]).stdout).unwrap();
     assert!(
-        text.contains("last scan: deep, ") && text.contains("60 metadata errors, 2 watch errors"),
+        text.contains("deep scan: ") && text.contains("60 metadata errors, 2 watch errors"),
         "{text}"
     );
 
