@@ -70,6 +70,8 @@ JSON request bodies are limited to 4 KiB. The UI is the reference client.
 | `GET /api/find?q=PREFIX&limit=100` | Filename-prefix matches |
 | `GET /api/history` | Scan history and rate samples |
 | `GET /api/activity` | Recent coalesced updates |
+| `GET /api/cleanup[?refresh]` | Cached rebuildable-folder list (`folders`, `age_seconds`, `updating`); recomputed in the background after 15 minutes or on `refresh` |
+| `GET /api/growth?days=7` | Large folders that grew most; `days` is clamped to 1–60 |
 | `POST /api/rescan` | Queue a deep scan |
 | `POST /api/delete/preview` with `{"id":ID}` | Check eligibility and issue a preview token |
 | `POST /api/delete` with `{"token":"..."}` | Delete the previewed entry |
