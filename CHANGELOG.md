@@ -31,6 +31,9 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
   resolved no longer keeps it at `warn` until a restart. It prints that scan's
   mode, size and errors; `status` adds `last_complete_scan` and keeps the
   counters since start.
+- The website's terminal example showed `sudo disko scan --incremental`
+  printing per-filesystem lines and "Done", which the CLI never prints; it now
+  shows `disko health` and its real output.
 
 ### Added
 
