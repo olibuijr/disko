@@ -8,6 +8,8 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
 
 - A folder or file removed while the walker reached it (between listing its
   parent and reading it) no longer counts as a metadata error or logs one.
+- A folder removed before its inotify watch was added no longer counts as a
+  watch error, which kept `disko health` at `warn` until the next restart.
 
 ## [0.5.0] - 2026-11-24
 

@@ -60,6 +60,8 @@ impl Index {
                 Ok(()) => {
                     self.watched.insert(p.to_owned());
                 }
+                // Removed before the watch was added: nothing is left to watch.
+                Err(e) if vanished(&e) => {}
                 Err(e) => {
                     self.watch_errors += 1;
                     if self.watch_errors <= 5 {
@@ -71,6 +73,14 @@ impl Index {
                 }
             }
         }
+    }
+}
+
+fn vanished(e: &notify::Error) -> bool {
+    match &e.kind {
+        notify::ErrorKind::PathNotFound => true,
+        notify::ErrorKind::Io(io) => io.kind() == std::io::ErrorKind::NotFound,
+        _ => false,
     }
 }
 
@@ -106,4 +116,20 @@ fn nested_subvolume(p: &Path, covered: &HashSet<u64>) -> bool {
     stx.stx_ino == 256
         && stx.stx_attributes_mask & mount_root != 0
         && stx.stx_attributes & mount_root == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use notify::Watcher;
+
+    #[test]
+    fn watching_a_removed_folder_is_recognised_as_vanished() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut w = notify::recommended_watcher(|_| {}).unwrap();
+        let e = w
+            .watch(&dir.path().join("gone"), super::RecursiveMode::NonRecursive)
+            .unwrap_err();
+        assert!(super::vanished(&e), "{e:?}");
+        assert!(!super::vanished(&notify::Error::generic("other")));
+    }
 }
