@@ -47,10 +47,12 @@ async function poll() {
     document.querySelector('#last-updated').textContent = live.alive ? '' : `Last heard from ${ago(status.heartbeat)}`;
     const notice = document.querySelector('#error');
     const problems = [];
-    if (status.watch_errors) problems.push(`${count(status.watch_errors)} folders can't be watched for changes; they refresh on the next scan.`);
+    // Judge the last finished scan, as disko health does; the status counters run since daemon start.
+    const scan = status.last_complete_scan || {};
+    if (scan.watch_errors) problems.push(`${count(scan.watch_errors)} folders can't be watched for changes; they refresh on the next scan.`);
     if (state.session.default_password) problems.push('The dashboard still uses the default password. Anyone on your network can sign in; set a new one with: sudo disko password');
     // A handful of unreadable entries is normal (files vanish mid-scan).
-    if (status.metadata_errors >= 50) problems.push(`${count(status.metadata_errors)} entries couldn't be read (often permissions); the daemon log lists them.`);
+    if (scan.metadata_errors >= 50) problems.push(`${count(scan.metadata_errors)} entries couldn't be read in the last scan (often permissions); the daemon log lists them.`);
     notice.textContent = problems.join(' '); notice.hidden = !problems.length;
     // Page refreshes rebuild markup; put keyboard focus back where it was.
     const focused = document.activeElement?.closest?.('[data-key]')?.dataset.key;
