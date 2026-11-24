@@ -45,6 +45,10 @@ pub enum Command {
         no_web: bool,
         #[arg(long)]
         password_file: Option<PathBuf>,
+        /// Behind a reverse proxy on this host: take the login rate-limit address
+        /// from X-Forwarded-For or X-Real-IP when the peer is loopback.
+        #[arg(long, env = "DISKO_TRUST_PROXY", value_parser = clap::builder::FalseyValueParser::new())]
+        trust_proxy: bool,
     },
     /// Serve the dashboard for an existing index, without starting another writer.
     Serve {
@@ -52,6 +56,10 @@ pub enum Command {
         listen: std::net::SocketAddr,
         #[arg(long)]
         password_file: Option<PathBuf>,
+        /// Behind a reverse proxy on this host: take the login rate-limit address
+        /// from X-Forwarded-For or X-Real-IP when the peer is loopback.
+        #[arg(long, env = "DISKO_TRUST_PROXY", value_parser = clap::builder::FalseyValueParser::new())]
+        trust_proxy: bool,
     },
     /// Read a new dashboard password from stdin and store an Argon2id hash.
     Password {
@@ -135,4 +143,20 @@ pub struct ScanArgs {
 pub enum Kind {
     Files,
     Dirs,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trusting_a_proxy_is_opt_in() {
+        let trusts = |args: &[&str]| match Cli::try_parse_from(args).unwrap().command {
+            Command::Serve { trust_proxy, .. } | Command::Watch { trust_proxy, .. } => trust_proxy,
+            _ => unreachable!(),
+        };
+        assert!(!trusts(&["disko", "serve"]));
+        assert!(trusts(&["disko", "serve", "--trust-proxy"]));
+        assert!(trusts(&["disko", "watch", "/", "--trust-proxy"]));
+    }
 }

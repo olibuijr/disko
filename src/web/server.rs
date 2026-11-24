@@ -19,6 +19,7 @@ pub fn start(
         db,
         auth,
         rescan,
+        trust_proxy: options.trust_proxy,
         previews: Mutex::new(HashMap::new()),
         deleting: Mutex::new(()),
     });

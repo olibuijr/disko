@@ -27,6 +27,12 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
   500 instead of ending one of the four web worker threads.
 - The dashboard compares the CSRF token in constant time.
 
+### Added
+
+- `--trust-proxy` (`DISKO_TRUST_PROXY=1`) for `watch` and `serve`: behind a
+  reverse proxy on the same host, login attempts are rate-limited per forwarded
+  client address instead of one shared bucket for the proxy.
+
 ## [0.5.0] - 2026-11-24
 
 ### Added

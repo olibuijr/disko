@@ -95,6 +95,28 @@ impl Auth {
     }
 }
 
+/// The address a login is rate-limited by. Behind a reverse proxy every peer
+/// is the proxy, so with `trust` (opt-in, DISKO_TRUST_PROXY) a loopback peer's
+/// forwarded address is used instead: the last X-Forwarded-For entry, which the
+/// nearest proxy appends and a client cannot forge, else X-Real-IP. Headers
+/// from any other peer are ignored, since a client could set them freely.
+pub fn client_ip(peer: IpAddr, headers: &[Header], trust: bool) -> IpAddr {
+    if !trust || !peer.to_canonical().is_loopback() {
+        return peer;
+    }
+    let header = |name: &'static str| {
+        headers
+            .iter()
+            .find(|h| h.field.equiv(name))
+            .map(|h| h.value.as_str())
+    };
+    header("X-Forwarded-For")
+        .and_then(|v| v.rsplit(',').next())
+        .or_else(|| header("X-Real-IP"))
+        .and_then(|v| v.trim().parse::<IpAddr>().ok())
+        .unwrap_or(peer)
+}
+
 /// Compare a secret in time that does not depend on where the inputs differ,
 /// so response timing cannot reveal a token byte by byte. Only the length,
 /// which is fixed and public, can return early. Session IDs and delete-preview
@@ -127,5 +149,34 @@ mod tests {
         assert!(!Auth::csrf(&session, &[]));
         assert!(same_secret(b"", b""));
         assert!(!same_secret(b"x", b"y"));
+    }
+
+    #[test]
+    fn forwarded_addresses_count_only_from_a_trusted_local_proxy() {
+        let h = |pairs: &[(&str, &str)]| -> Vec<Header> {
+            pairs
+                .iter()
+                .map(|(k, v)| Header::from_bytes(*k, *v).unwrap())
+                .collect()
+        };
+        let local: IpAddr = "127.0.0.1".parse().unwrap();
+        let lan: IpAddr = "192.168.1.50".parse().unwrap();
+        let client: IpAddr = "203.0.113.7".parse().unwrap();
+        let forwarded = h(&[("X-Forwarded-For", "10.9.9.9, 203.0.113.7")]);
+        // Off by default, and never for a peer that is not loopback.
+        assert_eq!(client_ip(local, &forwarded, false), local);
+        assert_eq!(client_ip(lan, &forwarded, true), lan);
+        // The proxy's own entry (the last one) wins over a forged first one.
+        assert_eq!(client_ip(local, &forwarded, true), client);
+        let v6: IpAddr = "::1".parse().unwrap();
+        assert_eq!(client_ip(v6, &forwarded, true), client);
+        let real = h(&[("X-Real-IP", "203.0.113.7")]);
+        assert_eq!(client_ip(local, &real, true), client);
+        // Garbage or no header: the peer.
+        assert_eq!(
+            client_ip(local, &h(&[("X-Forwarded-For", "junk")]), true),
+            local
+        );
+        assert_eq!(client_ip(local, &[], true), local);
     }
 }

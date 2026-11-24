@@ -33,6 +33,7 @@ fn run() -> Result<()> {
             listen,
             no_web,
             password_file,
+            trust_proxy,
         } => daemon::writer(
             &cli,
             scan,
@@ -46,6 +47,7 @@ fn run() -> Result<()> {
                     Some(web::Options {
                         listen: *listen,
                         password_file: web::password_path(&cli.db, password_file.as_deref()),
+                        trust_proxy: *trust_proxy,
                     })
                 },
             }),
@@ -54,6 +56,7 @@ fn run() -> Result<()> {
         Command::Serve {
             listen,
             password_file,
+            trust_proxy,
         } => {
             open(&cli.db, false)?;
             let stop = Arc::new(AtomicBool::new(false));
@@ -64,6 +67,7 @@ fn run() -> Result<()> {
                 web::Options {
                     listen: *listen,
                     password_file: web::password_path(&cli.db, password_file.as_deref()),
+                    trust_proxy: *trust_proxy,
                 },
                 stop,
                 None,

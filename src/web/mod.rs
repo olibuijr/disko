@@ -17,6 +17,9 @@ use std::{
 pub struct Options {
     pub listen: SocketAddr,
     pub password_file: PathBuf,
+    /// Rate-limit logins by the forwarded client address when the peer is
+    /// loopback (a reverse proxy on this host).
+    pub trust_proxy: bool,
 }
 /// Lock web state even if a thread panicked while holding it. The guarded maps
 /// and flags stay valid after any partial update, and an unwrap here would turn
@@ -34,6 +37,7 @@ struct App {
     db: PathBuf,
     auth: auth::Auth,
     rescan: Option<Arc<AtomicBool>>,
+    trust_proxy: bool,
     previews: Mutex<HashMap<String, mutations::Preview>>,
     deleting: Mutex<()>,
 }

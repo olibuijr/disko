@@ -9,6 +9,7 @@ Global options: `--db PATH` (or `DISKO_DB`) and `--json`.
 | `watch --no-web` | Index and watch without HTTP |
 | `watch --listen ADDRESS:PORT` | Choose dashboard listener; default `0.0.0.0:7331` |
 | `watch --password-file PATH` | Choose a password hash file |
+| `watch --trust-proxy` | Rate-limit logins by `X-Forwarded-For`/`X-Real-IP` from a loopback reverse proxy (`DISKO_TRUST_PROXY=1`); also for `serve` |
 | `watch --reconcile-secs N` | Periodic scan; default 86400 (daily), zero disables |
 | `watch --deep-secs N` | Deep scan interval; default 604800 (weekly); other scans are incremental; zero makes every scan deep |
 | `scan --incremental` | Reread only folders whose mtime or ctime changed |

@@ -65,10 +65,11 @@ pub(super) fn dispatch(app: &App, request: &mut Request, port: u16) -> Result<Re
         ));
     }
     if route == "/api/login" && request.method() == &Method::Post {
-        let ip = request
+        let peer = request
             .remote_addr()
             .map(|a| a.ip())
             .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
+        let ip = auth::client_ip(peer, request.headers(), app.trust_proxy);
         let body = body(request)?;
         return Ok(
             match app.auth.login(body["password"].as_str().unwrap_or(""), ip) {

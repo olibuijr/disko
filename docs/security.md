@@ -9,7 +9,14 @@ The installed daemon binds `0.0.0.0:7331`. The initial password is `disko`;
 The password file contains an Argon2id hash, uses mode 0600 and is replaced
 atomically. The server keeps at most 64 sessions in memory. Session cookies are
 HttpOnly and SameSite=Strict, expire after 12 hours, and are invalidated by restart.
-Login attempts are limited to five per source IP per minute.
+Login attempts are limited to five per source IP per minute. Behind a reverse
+proxy on the same host every request comes from the proxy, so all clients would
+share one limit; start the daemon with `--trust-proxy` (or `DISKO_TRUST_PROXY=1`)
+to limit by the forwarded address instead. It is used only when the peer is
+loopback: the last `X-Forwarded-For` entry (the one the proxy appends), or
+`X-Real-IP` when there is no `X-Forwarded-For`. The proxy must append to
+`X-Forwarded-For` or overwrite `X-Real-IP`; leave the option off without a
+local proxy, since any local process could then choose its address.
 
 All metadata APIs require authentication. Mutation APIs also require a per-session
 CSRF header. Host validation accepts localhost and numeric LAN/loopback addresses;
