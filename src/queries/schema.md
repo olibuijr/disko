@@ -9,8 +9,10 @@ nodes: one row per indexed path (the root "/" is id 1, parent 0)
   files, entries    subtree counts (entries includes the node itself)
   mtime, ctime      Unix seconds
   dev, ino, links, mode, uid, gid   stat fields; links>1 marks hardlinks
-meta: key/value status (state, pid, heartbeat, last_scan, scan_mode, coverage, ...)
-scans: scan history (started, finished, visited, errors, reason, state)
+meta: key/value status (state, pid, heartbeat, last_scan, scan_mode, coverage, ...);
+  metadata_errors and watch_errors count since the daemon started
+scans: scan history (started, finished, visited, errors, watch_errors, reason,
+  state); errors and watch_errors are that scan's own counts
 growth: daily (day, id, blocks) record of folders of 1 GiB or more, 60 days
 samples, activity: bounded rate history and recent changes
 Queries are read-only and print JSON Lines. Filter with kind and parent indexes;

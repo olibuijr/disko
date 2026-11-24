@@ -26,6 +26,11 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
   `/api/cleanup` until a restart, and a panic in any dashboard request answers
   500 instead of ending one of the four web worker threads.
 - The dashboard compares the CSRF token in constant time.
+- `disko health` judges metadata and watch errors by the last finished scan
+  instead of counters that run from daemon start, so an error long since
+  resolved no longer keeps it at `warn` until a restart. It prints that scan's
+  mode, size and errors; `status` adds `last_complete_scan` and keeps the
+  counters since start.
 
 ### Added
 

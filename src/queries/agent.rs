@@ -31,16 +31,19 @@ pub(super) fn health(c: &Connection, db: &Path, path: Option<&Path>, as_json: bo
     if last_scan == 0 {
         warn.push("no scan has completed yet".into());
     }
-    let errors = s["metadata_errors"].as_i64().unwrap_or(0);
+    // Judge the latest finished scan, not the counters since daemon start:
+    // one vanished folder must not hold the verdict at warn until a restart.
+    let scan = &s["last_complete_scan"];
+    let errors = scan["metadata_errors"].as_i64().unwrap_or(0);
     if errors >= 50 {
         warn.push(format!(
-            "{errors} entries could not be read since the daemon started"
+            "{errors} entries could not be read in the last scan (journalctl -u disko lists them)"
         ));
     }
-    let watch_errors = s["watch_errors"].as_i64().unwrap_or(0);
+    let watch_errors = scan["watch_errors"].as_i64().unwrap_or(0);
     if watch_errors > 0 {
         warn.push(format!(
-            "{watch_errors} folders could not be watched; their changes wait for the next scan"
+            "{watch_errors} folders could not be watched in the last scan; their changes wait for the next scan"
         ));
     }
     let mut indexed = Value::Null;
@@ -62,12 +65,17 @@ pub(super) fn health(c: &Connection, db: &Path, path: Option<&Path>, as_json: bo
     let v = json!({
         "level": level, "state": state, "writer_alive": alive, "heartbeat_age_seconds": age,
         "last_scan": last_scan, "scan_mode": s["scan_mode"], "watch_backend": s["watch_backend"],
+        "last_complete_scan": scan,
+        "metadata_errors_since_start": s["metadata_errors"], "watch_errors_since_start": s["watch_errors"],
         "entries": s["totals"]["entries"], "path_indexed": indexed, "problems": fail, "warnings": warn,
     });
     if as_json {
         println!("{v}");
     } else {
         println!("{level}: {state}, heartbeat {age}s ago");
+        if scan.is_object() {
+            println!("{}", scan_summary(scan));
+        }
         for line in fail.iter().chain(&warn) {
             println!("  - {line}");
         }
@@ -77,6 +85,28 @@ pub(super) fn health(c: &Connection, db: &Path, path: Option<&Path>, as_json: bo
         "warn" => 2,
         _ => 1,
     })
+}
+
+/// "last scan: incremental, 2122891 entries in 1262s, no errors"
+fn scan_summary(scan: &Value) -> String {
+    let mode = scan["mode"]
+        .as_str()
+        .map_or(String::new(), |m| format!("{m}, "));
+    let (errors, watch) = (
+        scan["metadata_errors"].as_i64().unwrap_or(0),
+        scan["watch_errors"].as_i64().unwrap_or(0),
+    );
+    let problems = match (errors, watch) {
+        (0, 0) => "no errors".to_owned(),
+        (e, 0) => format!("{e} metadata errors"),
+        (0, w) => format!("{w} watch errors"),
+        (e, w) => format!("{e} metadata errors, {w} watch errors"),
+    };
+    format!(
+        "last scan: {mode}{} entries in {}s, {problems}",
+        scan["entries"].as_i64().unwrap_or(0),
+        scan["seconds"].as_i64().unwrap_or(0)
+    )
 }
 
 /// Ask the running daemon for a deep scan (SIGUSR1, the same as the dashboard's button).
@@ -125,4 +155,22 @@ pub(super) fn schema(c: &Connection, as_json: bool) -> Result<()> {
         println!("\n{SCHEMA_NOTES}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_scan_summary_names_mode_size_and_errors() {
+        let scan = |e: i64, w: i64| json!({"mode": "incremental", "entries": 2122891, "seconds": 1262, "metadata_errors": e, "watch_errors": w});
+        assert_eq!(
+            scan_summary(&scan(0, 0)),
+            "last scan: incremental, 2122891 entries in 1262s, no errors"
+        );
+        assert!(scan_summary(&scan(4, 0)).ends_with(", 4 metadata errors"));
+        assert!(scan_summary(&scan(4, 1)).ends_with(", 4 metadata errors, 1 watch errors"));
+        let old = json!({"mode": null, "entries": 5, "seconds": 2, "metadata_errors": 0, "watch_errors": 0});
+        assert_eq!(scan_summary(&old), "last scan: 5 entries in 2s, no errors");
+    }
 }

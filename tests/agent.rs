@@ -29,6 +29,38 @@ fn agent_commands_report_health_schema_and_skill() {
     assert_eq!(v["path_indexed"], true);
     assert!(v["problems"][0].as_str().unwrap().contains("not running"));
 
+    // Errors counted since the daemon started do not warn; the last scan's do.
+    let c = rusqlite::Connection::open(&db).unwrap();
+    c.execute_batch("UPDATE meta SET value='500' WHERE key IN ('metadata_errors','watch_errors')")
+        .unwrap();
+    let health = || -> serde_json::Value {
+        let out = disko(&db, &["--json", "health"]);
+        serde_json::from_slice(&out.stdout).unwrap()
+    };
+    let v = health();
+    assert_eq!(v["warnings"], serde_json::json!([]), "{v}");
+    assert_eq!(v["metadata_errors_since_start"], 500);
+    assert_eq!(v["last_complete_scan"]["metadata_errors"], 0);
+    assert_eq!(v["last_complete_scan"]["mode"], "deep");
+    c.execute_batch(
+        "UPDATE scans SET errors=60, watch_errors=2 WHERE id=(SELECT max(id) FROM scans)",
+    )
+    .unwrap();
+    let warnings = health()["warnings"].to_string();
+    assert!(
+        warnings.contains("60 entries could not be read in the last scan"),
+        "{warnings}"
+    );
+    assert!(
+        warnings.contains("2 folders could not be watched in the last scan"),
+        "{warnings}"
+    );
+    let text = String::from_utf8(disko(&db, &["health"]).stdout).unwrap();
+    assert!(
+        text.contains("last scan: deep, ") && text.contains("60 metadata errors, 2 watch errors"),
+        "{text}"
+    );
+
     let out = disko(&db, &["--json", "schema"]);
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(

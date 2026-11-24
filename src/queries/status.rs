@@ -16,6 +16,7 @@ pub fn status_value(c: &Connection, db: &Path) -> Result<Value> {
         "writer_alive".into(),
         json!(pid > 0 && PathBuf::from(format!("/proc/{pid}")).exists()),
     );
+    meta.insert("last_complete_scan".into(), last_complete_scan(c)?);
     meta.insert("totals".into(), node(c, 1)?);
     meta.insert("database_bytes".into(), json!(std::fs::metadata(db)?.len()));
     if let Some(roots) = meta
@@ -28,4 +29,39 @@ pub fn status_value(c: &Connection, db: &Path) -> Result<Value> {
     }
     meta.insert("disks".into(), json!(filesystems(c)?));
     Ok(Value::Object(meta))
+}
+
+/// The newest finished scan with its own error counts. `metadata_errors` and
+/// `watch_errors` in `meta` keep counting from daemon start (scans and live
+/// events), so they say nothing about whether the latest scan was clean.
+fn last_complete_scan(c: &Connection) -> Result<Value> {
+    let row = c
+        .query_row(
+            "SELECT started,finished,visited,errors,watch_errors,reason FROM scans WHERE state='complete' ORDER BY id DESC LIMIT 1",
+            [],
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, i64>(4)?,
+                    r.get::<_, String>(5)?,
+                ))
+            },
+        )
+        .optional()?;
+    Ok(match row {
+        Some((started, finished, visited, errors, watch_errors, reason)) => {
+            let mode = ["deep", "incremental"]
+                .into_iter()
+                .find(|m| reason.ends_with(&format!("({m})")));
+            json!({
+                "started": started, "finished": finished, "seconds": finished - started,
+                "mode": mode, "reason": reason, "entries": visited,
+                "metadata_errors": errors, "watch_errors": watch_errors,
+            })
+        }
+        None => Value::Null,
+    })
 }

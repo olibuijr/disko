@@ -20,11 +20,11 @@ Global options: `--db PATH` (or `DISKO_DB`) and `--json`.
 | `largest PATH [--kind files\|dirs] [-n N] [--apparent]` | Largest descendants |
 | `info PATH` | Metadata and stored subtree totals |
 | `find PREFIX [-n N] [--contains]` | Prefix or substring filename search |
-| `status` | Coverage, progress and health |
+| `status` | Coverage, progress and health; `metadata_errors` and `watch_errors` count since the daemon started, `last_complete_scan` has the newest finished scan's own counts |
 | `sql QUERY` | Read-only SQLite query; JSON Lines output |
 | `cleanup [-n N] [--min-mib M]` | Largest build-output, package and cache folders |
 | `grew [--days N]` | Large folders that grew most, from the daily size record |
-| `health [PATH]` | One verdict for scripts and agents: `ok`, `warn` or `fail` with reasons; exit 0, 2 or 1 |
+| `health [PATH]` | One verdict for scripts and agents: `ok`, `warn` or `fail` with reasons; exit 0, 2 or 1. Error warnings judge the last finished scan |
 | `rescan` | Ask the running daemon for a deep scan (SIGUSR1; needs root) |
 | `schema` | Index tables and what their columns mean |
 | `skill [--install DIR]` | Print the agent skill, or write it to `DIR/disko/SKILL.md` |

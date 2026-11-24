@@ -3,7 +3,7 @@ use crate::{
     index::*,
 };
 use anyhow::{Context, Result, bail};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 use std::{
     collections::BinaryHeap,
