@@ -2,6 +2,13 @@
 
 All notable changes to Disko are recorded here. Versions follow Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- A folder or file removed while the walker reached it (between listing its
+  parent and reading it) no longer counts as a metadata error or logs one.
+
 ## [0.5.0] - 2026-11-24
 
 ### Added

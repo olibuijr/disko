@@ -108,7 +108,11 @@ pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResu
     let rd = match fs::read_dir(&job.path) {
         Ok(rd) => rd,
         Err(e) => {
-            r.read_failed = Some(e);
+            // Removed after its parent listed it: a race, not a read error.
+            // The delete event or the parent's next read drops its row.
+            if e.kind() != std::io::ErrorKind::NotFound {
+                r.read_failed = Some(e);
+            }
             r.complete = false;
             return r;
         }
@@ -130,6 +134,8 @@ pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResu
                 // fstatat relative to the open directory: no path walk per entry.
                 match entry.metadata() {
                     Ok(m) => r.children.push((entry.file_name(), m)),
+                    // Gone since readdir: left out, so a complete read removes it.
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                     Err(e) => r.stat_failed.push((entry.file_name(), e)),
                 }
             }
@@ -151,5 +157,24 @@ pub(super) fn place_for(inherited: Place, root: bool, name: &OsStr) -> Place {
         b"home" | b"var" | b"usr" | b"tmp" => Place::Front,
         b"mnt" => Place::Tail,
         _ => Place::Regular,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_removed_before_its_read_is_not_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let job = Job {
+            path: dir.path().join("gone"),
+            id: 2,
+            seen: 1,
+            place: Place::Regular,
+            only: None,
+        };
+        let r = walk_dir(&AtomicBool::new(false), &Filter::new(Vec::new()), &job);
+        assert!(r.read_failed.is_none() && !r.complete && r.children.is_empty());
     }
 }
