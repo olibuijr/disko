@@ -108,7 +108,7 @@
   #live .panel > .ui-panel, #install .panel > .ui-panel { height: 100%; }
   .dk-code { font-size: 14px; line-height: 1.8; padding: 20px 22px; }
   .dk-feed li { padding: 12px 16px; font-size: 14px; }
-  @media (max-width: 639px) { #live .panel { --p-h: 180px; } #install .panel { --p-h: 200px; } }
+  @media (max-width: 639px) { #live .panel { --p-h: 180px; } #install .panel { --p-h: 200px; } #install .card .panel { min-height: 292px; } }
   .dk-feed { list-style: none; margin: 0; padding: 0; font: 400 13px/1.3 var(--font-mono); }
   .dk-feed li { display: grid; grid-template-columns: 80px 1fr auto; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--u-line); }
   .dk-feed li:first-child { border-top: 0; }
@@ -138,6 +138,8 @@
   .dk-stack li span { display: grid; gap: 4px; }
   .dk-stack b { font-weight: 500; font-family: var(--font-display); font-size: var(--t-lead); }
   @media (max-width: 1023px) { .dk-stack li { grid-column: 1 / -1; } }
+  /* a long real output line wraps on a phone, as it would in a narrow terminal */
+  @media (max-width: 639px) { .ui-term__ln { white-space: pre-wrap; overflow-wrap: anywhere; } }
 </style>
 </head>
 <body>
@@ -327,7 +329,7 @@
             </div></div>
           </article>
           <article class="card card--row card--open span-6">
-            <h3>Rescans only changed folders</h3>
+            <h3>The daemon rereads only changed folders</h3>
             <p>Daily scans skip folders whose timestamps match the index; a full check runs weekly.</p>
             <div class="panel">
               <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:520px;--ax:max(24px, 50% - 260px);--ay:40px;--ay-sm:16px" data-ui-loop>
@@ -359,7 +361,7 @@ new  /srv/media/2026         <span class="m">id 48211</span>
   <span class="p">WHERE</span> id = 48211;      <span class="m">-- 1 row, 31,402 entries moved</span></pre></div></div>
         </article>
         <article class="card card--row card--open span-6">
-          <h3>Restarts the daemon when it stalls</h3>
+          <h3>The watchdog restarts a stalled daemon</h3>
           <p>A watchdog logs the stuck step and exits after 15 minutes, so systemd resumes the scan.</p>
           <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="m">$ journalctl -u disko</span>
 fanotify covers 6 device IDs on 3 filesystems
@@ -453,7 +455,7 @@ deep scan checked 12,318,655 entries in 3,029s
       <div class="grid grid--top">
       <div class="faq span-6">
         <div class="faq__item"><h3>Does Disko read file contents?</h3><p>No. It records names, sizes, owners and timestamps, never file contents, and does not follow symlinks.</p></div>
-        <div class="faq__item"><h3>How much memory does the daemon use?</h3><p>About 90 MB resident while watching an index of 12 million entries, with a 64 MiB SQLite cache.</p></div>
+        <div class="faq__item"><h3>How much memory does the Disko daemon use?</h3><p>About 90 MB resident while watching an index of 12 million entries, with a 64 MiB SQLite cache.</p></div>
         <div class="faq__item"><h3>Which Linux systems does it support?</h3><p>Linux. Filesystem-wide watching needs fanotify; older kernels and other setups fall back to inotify.</p></div>
         <div class="faq__item"><h3>Can I put Disko on the internet?</h3><p>Keep it on a trusted network or behind an HTTPS proxy or SSH tunnel. Passwords are stored as Argon2id hashes.</p></div>
       </div>
