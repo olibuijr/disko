@@ -84,6 +84,7 @@ impl Index {
             stat_failed,
         } = r;
         let mut queued = 0usize;
+        let mut subfolders = Vec::new();
         let root = path == Path::new("/");
         if let Some(e) = read_failed {
             self.error(&path, &e);
@@ -99,9 +100,14 @@ impl Index {
         }
         for (name, m) in children {
             // A folder with millions of entries takes minutes to replay, so a
-            // stop cannot wait for it. Bailing here leaves the folder in
-            // scan_queue; the next run rereads it, and upserts are idempotent.
+            // stop cannot wait for it. The folder stays in scan_queue and the
+            // next run rereads it (upserts are idempotent). Its subfolders
+            // queued so far leave the queue, since that reread queues them
+            // again; none of them has been absorbed yet.
             if self.stopping() {
+                for id in subfolders {
+                    self.queue_done(id)?;
+                }
                 bail!("interrupted; completed batches are saved");
             }
             let child = path.join(&name);
@@ -144,6 +150,7 @@ impl Index {
                 },
             };
             self.queue_push(&job)?;
+            subfolders.push(job.id);
             pool.dispatch(job);
             queued += 1;
         }

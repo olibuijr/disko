@@ -79,7 +79,15 @@ fn interrupted_scan_resumes_where_it_stopped() {
             .output()
             .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("\"scanning\""))
     };
-    while !scanning(&db) {
+    // A stop abandons the folder being written, so wait until the first batch
+    // of finished folders is committed; otherwise nothing is left to resume.
+    let committed = |db: &Path| {
+        disko(db)
+            .args(["sql", "SELECT count(*) AS n FROM nodes WHERE kind=0"])
+            .output()
+            .is_ok_and(|o| !String::from_utf8_lossy(&o.stdout).contains("\"n\":0"))
+    };
+    while !(scanning(&db) && committed(&db)) {
         assert!(
             start.elapsed() < Duration::from_secs(60),
             "scan never started"
