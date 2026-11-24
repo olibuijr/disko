@@ -25,6 +25,7 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
 - A panic while computing cleanup suggestions no longer breaks
   `/api/cleanup` until a restart, and a panic in any dashboard request answers
   500 instead of ending one of the four web worker threads.
+- The dashboard compares the CSRF token in constant time.
 
 ## [0.5.0] - 2026-11-24
 
