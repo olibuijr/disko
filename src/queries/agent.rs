@@ -34,7 +34,7 @@ pub(super) fn health(c: &Connection, db: &Path, path: Option<&Path>, as_json: bo
     let errors = s["metadata_errors"].as_i64().unwrap_or(0);
     if errors >= 50 {
         warn.push(format!(
-            "{errors} entries could not be read in the last scan"
+            "{errors} entries could not be read since the daemon started"
         ));
     }
     let watch_errors = s["watch_errors"].as_i64().unwrap_or(0);
