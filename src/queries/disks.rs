@@ -3,10 +3,12 @@ use crate::mounts::{self, DISK_TYPES, Mount};
 use std::{collections::BTreeMap, ffi::CString, os::unix::ffi::OsStrExt};
 
 /// One entry per filesystem (not per mount: Btrfs subvolumes share capacity),
-/// with what the index can see on it. `unindexed_bytes` is space in use that no
-/// indexed path accounts for: snapshots, excluded trees, metadata and slack,
+/// with what the index can see on it. `unindexed` is space in use (bytes) that
+/// no indexed path accounts for: snapshots, excluded trees, metadata and slack,
 /// offset by compression and deduplication. It is an estimate, not a size of
-/// anything that can be deleted directly.
+/// anything that can be deleted directly. `indexed` counts every path, so
+/// hardlinks, reflinks and compression can push it past `used`; `unindexed`
+/// is then 0, never negative.
 pub fn filesystems(c: &Connection) -> Result<Vec<Value>> {
     let table = mounts::read();
     let mut groups: BTreeMap<String, Vec<&Mount>> = BTreeMap::new();
@@ -74,10 +76,15 @@ pub fn filesystems(c: &Connection) -> Result<Vec<Value>> {
             "available": available,
             "used": used,
             "indexed": indexed.max(0),
-            "unindexed": used as i64 - indexed.max(0),
+            "unindexed": unindexed(used, indexed),
         }));
     }
     Ok(out)
+}
+
+/// Used space the index does not account for, never below zero.
+fn unindexed(used: u64, indexed: i64) -> i64 {
+    (used as i64).saturating_sub(indexed.max(0)).max(0)
 }
 
 fn blocks(c: &Connection, id: i64) -> Result<i64> {
@@ -100,4 +107,17 @@ fn usage(path: &Path) -> Option<(u64, u64, u64)> {
         s.f_bavail as u64 * unit,
         (s.f_blocks - s.f_bfree) as u64 * unit,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unindexed;
+
+    #[test]
+    fn unindexed_space_is_never_negative() {
+        assert_eq!(unindexed(1000, 600), 400);
+        // Hardlinks are counted once per path, so the index can exceed use.
+        assert_eq!(unindexed(1000, 1500), 0);
+        assert_eq!(unindexed(1000, -5), 1000);
+    }
 }

@@ -20,6 +20,8 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
   the kernel's dentry and inode cache charged to the service, so at
   `MemoryHigh` the kernel now drops that cache instead of swapping out the
   daemon's working set (about 110 MB).
+- `unindexed` in `disko status` and `/api/roots` is never negative; it read
+  below zero when hardlinks (counted once per path) made `indexed` exceed `used`.
 
 ## [0.5.0] - 2026-11-24
 

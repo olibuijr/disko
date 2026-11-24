@@ -36,3 +36,4 @@ Open:
 
 - The treemap at the index root mixes disks; selecting one disk is clearer.
 - `unindexed` is approximate on compressed Btrfs, where file block counts and on-disk use differ.
+  `indexed` counts hardlinked files once per path and can exceed `used`; `unindexed` is then 0.
