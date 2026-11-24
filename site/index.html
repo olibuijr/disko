@@ -125,6 +125,9 @@
   #install .panel { --p-h: 240px; }
   #install .dk-code { white-space: pre-wrap; overflow-wrap: anywhere; }
   #faq .panel { --p-h: 300px; }
+  #agents .panel { --p-h: 480px; }
+  #agents code { font-family: var(--font-mono); font-size: .92em; }
+  @media (max-width: 639px) { #agents .panel { --p-h: 420px; } }
   .dk-stack img { width: 40px; height: 40px; object-fit: contain; flex: none; }
   @media (max-width: 639px) { .ly-collage .dk-tile span { display: none; } }
   .dk-tile span { overflow: hidden; text-overflow: ellipsis; }
@@ -165,6 +168,7 @@
         </div>
       </div>
       <div class="nav__item"><a class="nav__link" href="#live">How it works</a></div>
+      <div class="nav__item"><a class="nav__link" href="#agents">Agents</a></div>
       <div class="nav__item"><a class="nav__link" href="#faq">Questions</a></div>
       <div class="nav__item"><a class="nav__link" href="https://github.com/olibuijr/disko">GitHub</a></div>
     </nav>
@@ -421,6 +425,33 @@ deep scan checked 12,318,655 entries in 3,029s
     </div>
   </section>
 
+  <section class="section" id="agents" aria-labelledby="agents-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <div class="span-5 stack-4">
+          <h2 id="agents-h">Disko for AI agents</h2>
+          <p>Every command answers in JSON, and <code>disko health</code> gives one verdict with an exit code. The binary carries an agent skill that teaches Claude Code, Codex and other agents to ask the index instead of walking the disk.</p>
+          <a class="link" href="https://github.com/olibuijr/disko/blob/main/skills/disko/SKILL.md">Read the agent skill</a>
+        </div>
+        <div class="span-6 start-7">
+          <div class="panel"><div class="ui ui-panel" style="width:100%"><pre class="dk-code"><span class="p">$</span> disko skill --install ~/.claude/skills
+<span class="m">installed ~/.claude/skills/disko/SKILL.md</span>
+
+<span class="p">$</span> disko --json health
+{"level":"ok","state":"watching","writer_alive":true,
+ "heartbeat_age_seconds":0,"problems":[],"warnings":[]}
+
+<span class="p">$</span> disko --json largest /srv --kind dirs -n 1
+[{"path": "/srv/media/2026", "kind": "directory",
+  "allocated_bytes": 11994283008, "files": 212}]
+
+<span class="p">$</span> sudo disko rescan
+<span class="m">asked the daemon for a deep scan</span></pre></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="section" id="faq" aria-labelledby="faq-h">
     <div class="wrap">
       <div class="section-head"><h2 id="faq-h">Questions about Disko</h2></div>
@@ -464,7 +495,7 @@ deep scan checked 12,318,655 entries in 3,029s
           <a class="nav__logo" href="#top"><img loading="lazy" src="favicon.svg" alt="" width="28" height="28">Disko</a>
           <p class="footer__lede">A live disk-usage index for Linux, with a dashboard and a command line.</p>
         </div>
-        <div class="span-2 start-7 footer__col"><h3>Product</h3><ul><li><a href="#tree">Disk tree</a></li><li><a href="#live">Live updates</a></li><li><a href="#install">Install</a></li></ul></div>
+        <div class="span-2 start-7 footer__col"><h3>Product</h3><ul><li><a href="#tree">Disk tree</a></li><li><a href="#live">Live updates</a></li><li><a href="#install">Install</a></li><li><a href="#agents">AI agents</a></li></ul></div>
         <div class="span-2 footer__col"><h3>Docs</h3><ul><li><a href="https://github.com/olibuijr/disko/blob/main/docs/architecture.md">Architecture</a></li><li><a href="https://github.com/olibuijr/disko/blob/main/docs/reference.md">Reference</a></li><li><a href="https://github.com/olibuijr/disko/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
         <div class="span-2 footer__col"><h3>Project</h3><ul><li><a href="https://github.com/olibuijr/disko">Source</a></li><li><a href="https://github.com/olibuijr/disko/issues">Issues</a></li><li><a href="https://github.com/olibuijr/disko/blob/main/LICENSE">MIT licence</a></li></ul></div>
       </div>

@@ -26,3 +26,11 @@ pub(super) fn deep_due(idx: &Index, interval: u64) -> Result<bool> {
         None => true,
     })
 }
+
+/// The deep-scan request flag: set by the dashboard's button and by SIGUSR1
+/// (`disko rescan`).
+pub(super) fn rescan_flag() -> anyhow::Result<std::sync::Arc<std::sync::atomic::AtomicBool>> {
+    let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    signal_hook::flag::register(signal_hook::consts::SIGUSR1, flag.clone())?;
+    Ok(flag)
+}

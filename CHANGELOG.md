@@ -2,6 +2,21 @@
 
 All notable changes to Disko are recorded here. Versions follow Semantic Versioning.
 
+## [0.5.0] - 2026-11-24
+
+### Added
+
+- Commands for scripts and AI agents: `disko health [PATH]` gives one verdict
+  (`ok`, `warn`, `fail`) with reasons and exit status 0, 2 or 1;
+  `disko rescan` asks the running daemon for a deep scan (SIGUSR1, the same as
+  the dashboard button); `disko schema` prints the index tables and what the
+  columns mean; `disko skill [--install DIR]` prints or installs the agent skill.
+- The agent skill moved to `skills/disko/SKILL.md` in the Agent Skills format
+  and ships inside the binary, so it always matches the installed version.
+- With `--json`, errors print `{"error": "..."}` on stdout.
+- Releases include a static x86_64 Linux binary with SQLite compiled in
+  (`release.sh`, cargo feature `bundled`).
+
 ## [0.4.0] - 2026-11-24
 
 ### Fixed

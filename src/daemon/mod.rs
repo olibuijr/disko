@@ -64,7 +64,7 @@ pub fn writer(cli: &Cli, s: &ScanArgs, watch: Option<WatchOptions>, deep: bool) 
 
 fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>, deep: bool) -> Result<()> {
     let stop = idx.stop.clone();
-    let rescan = Arc::new(AtomicBool::new(false));
+    let rescan = scan_mode::rescan_flag()?;
     if let Some(options) = watch.as_ref().and_then(|w| w.web.as_ref()) {
         idx.commit()?;
         web::start(

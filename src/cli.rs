@@ -105,6 +105,20 @@ pub enum Command {
     },
     /// Run a read-only SQL query; useful for custom filesystem analysis.
     Sql { query: String },
+    /// One health verdict for scripts and agents; exit 0 ok, 2 warn, 1 fail.
+    Health {
+        /// Also check that this path is in the index.
+        path: Option<PathBuf>,
+    },
+    /// Ask the running daemon for a deep scan (needs root).
+    Rescan,
+    /// Index tables and what their columns mean, for `disko sql`.
+    Schema,
+    /// Print the agent skill, or install it as DIR/disko/SKILL.md.
+    Skill {
+        #[arg(long, value_name = "DIR")]
+        install: Option<PathBuf>,
+    },
 }
 #[derive(clap::Args)]
 pub struct ScanArgs {

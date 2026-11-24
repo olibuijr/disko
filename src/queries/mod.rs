@@ -10,6 +10,7 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
 };
+mod agent;
 mod disks;
 mod insights;
 mod largest;
@@ -110,6 +111,12 @@ pub fn run(cli: &Cli) -> Result<()> {
                 )
             }
         }
+        Command::Health { path } => {
+            let code = agent::health(&c, &cli.db, path.as_deref(), cli.json)?;
+            std::process::exit(code)
+        }
+        Command::Rescan => agent::rescan(&c, cli.json),
+        Command::Schema => agent::schema(&c, cli.json),
         Command::Status => {
             println!(
                 "{}",

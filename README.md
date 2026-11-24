@@ -3,7 +3,7 @@
 # Disko
 
 [![CI](https://github.com/olibuijr/disko/actions/workflows/ci.yml/badge.svg)](https://github.com/olibuijr/disko/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.4.0-78944a)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-78944a)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **A Rust filesystem indexing daemon for fast disk-space queries and live metadata.**
@@ -161,6 +161,21 @@ The binary is `/usr/local/bin/disko`; database, history and password hash live i
 `/var/lib/disko`. Stopping the service preserves them. Re-run
 `./build.sh --install` to install an update and restart the service.
 
+## Use with AI agents
+
+Disko is built to be driven by coding agents such as Claude Code and Codex.
+Every command answers in JSON, and the binary carries an agent skill
+([skills/disko/SKILL.md](skills/disko/SKILL.md), Agent Skills format) that
+teaches an agent to ask the index instead of walking the disk.
+
+```sh
+disko skill --install ~/.claude/skills   # or any agent's skills folder
+disko --json health                      # ok / warn / fail, exit 0 / 2 / 1
+disko --json largest /srv --kind dirs -n 10
+disko schema                             # tables and columns for disko sql
+sudo disko rescan                        # ask the daemon for a deep scan
+```
+
 ## Coverage and accounting
 
 The service indexes `/`, including mounted disks and Btrfs subvolumes. It excludes
@@ -192,7 +207,7 @@ can require more work.
 
 ## Contributing and agent use
 
-Start with [SKILL.md](SKILL.md) for agent instructions and
+Start with [the agent skill](skills/disko/SKILL.md) for agent instructions and
 [development checks](docs/development.md) for tests. Source files are kept small;
 `tools/check_structure.py` enforces a 200-line limit for application source.
 Maintainers publish a release with `./release.sh`, which builds the static binary

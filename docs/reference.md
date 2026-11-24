@@ -23,6 +23,12 @@ Global options: `--db PATH` (or `DISKO_DB`) and `--json`.
 | `sql QUERY` | Read-only SQLite query; JSON Lines output |
 | `cleanup [-n N] [--min-mib M]` | Largest build-output, package and cache folders |
 | `grew [--days N]` | Large folders that grew most, from the daily size record |
+| `health [PATH]` | One verdict for scripts and agents: `ok`, `warn` or `fail` with reasons; exit 0, 2 or 1 |
+| `rescan` | Ask the running daemon for a deep scan (SIGUSR1; needs root) |
+| `schema` | Index tables and what their columns mean |
+| `skill [--install DIR]` | Print the agent skill, or write it to `DIR/disko/SKILL.md` |
+
+With `--json`, a failing command prints `{"error": "..."}` on stdout and exits 1.
 
 Password files default to `web-password` next to the database. Keep database
 storage outside indexed roots. Exclusions can change in place; changing roots
