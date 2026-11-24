@@ -5,7 +5,10 @@ After=local-fs.target
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/disko watch / --listen 0.0.0.0:7331
-Restart=on-failure
+# Also after a clean exit: a stray SIGTERM or SIGINT ends the daemon with
+# status 0, which left it down until someone noticed. `systemctl stop` still
+# stops it; systemd never restarts a unit it was asked to stop.
+Restart=always
 RestartSec=5
 # A failing daemon (for example a full disk) would otherwise rescan every 5s.
 RestartSteps=8

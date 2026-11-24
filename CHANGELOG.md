@@ -14,6 +14,8 @@ All notable changes to Disko are recorded here. Versions follow Semantic Version
   SIGKILL: the writer stops inside a large folder instead of after it, the
   WAL checkpoint is skipped on a stop, the forced exit comes after 10 s instead
   of 20 s, and the unit allows 60 s (`TimeoutStopSec`).
+- The service restarts after any exit (`Restart=always`), so a SIGTERM or
+  SIGINT not sent by systemd no longer leaves the daemon down.
 
 ## [0.5.0] - 2026-11-24
 
