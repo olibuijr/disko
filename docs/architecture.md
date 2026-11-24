@@ -49,9 +49,13 @@ repeated writes by path. The event channel and pending-path map are each bounded
 at 65,536 entries. Live updates use a 250 ms coalescing window.
 The scanner skips `.snapshots`, virtual filesystems and its state directory.
 
-Rename handling reconciles old and new subtrees. Hardlink writes refresh indexed
-sibling paths. Queue overflow and watcher errors request a full reconciliation.
-A scheduled reconciliation also runs once a day. When more than 65,536 distinct
+With fanotify on Linux 5.17+, a rename arrives as one `FAN_RENAME` event with
+both names and moves the entry and its subtree by updating one row; queued
+changes below a moved folder are rewritten to its new path. Elsewhere, rename
+handling reconciles old and new subtrees. Hardlink writes refresh indexed
+sibling paths. Queue overflow and watcher errors request a deep scan.
+A scheduled scan runs once a day; it is incremental unless a weekly deep scan
+is due (see Scans below). When more than 65,536 distinct
 paths are pending (for example during a long scan), they merge into their parent
 directories as recursive resyncs instead of forcing a rescan of every root. Metadata read failures
 preserve old information instead of assuming the inaccessible subtree was deleted.
@@ -60,6 +64,33 @@ Events are hints about current state, not an ordered filesystem journal. Remote
 writes, mount changes and rare races may require reconciliation. Registration
 failures are visible in status and logs. Disko does not silently change kernel
 watch limits.
+
+## Scans
+
+A deep scan reads every folder and stats every entry. An incremental scan
+follows mlocate's rule: a folder whose mtime and ctime equal the indexed values
+has had no entry added, removed or renamed, so it is not reread; only its
+indexed subfolders are stat'ed and descended. Because times are stored in
+whole seconds, a folder changed at or after the start of the previous
+completed scan is always reread. Files that change in place do not touch
+their folder, so incremental scans rely on live events for them; the weekly
+deep scan (`--deep-secs`) and any scan after lost events stat everything.
+
+## Removal
+
+Removing an entry detaches it: its row's parent becomes `-id`, ancestors lose
+its totals and nothing below it is reachable from `/`, all in one statement.
+The rows are deleted later, children before parents, in committed batches of
+2,048 while no changes are waiting, so a deleted tree of millions of entries
+never holds the writer in one transaction. Global queries (largest, find,
+cleanup, growth) skip detached rows until they are gone.
+
+## Liveness
+
+Every commit and every 4,096 entries a walker reads record progress. A
+watchdog thread exits the daemon after 15 minutes without progress, naming the
+phase it was in, so systemd restarts it and an interrupted scan resumes from
+`scan_queue`. After SIGTERM it forces an exit within 20 seconds.
 
 ## History
 

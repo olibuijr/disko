@@ -105,7 +105,7 @@ fn interrupted_scan_resumes_where_it_stopped() {
         &db,
         "SELECT reason,visited FROM scans ORDER BY id DESC LIMIT 1",
     )[0];
-    assert_eq!(last["reason"], "resumed after restart");
+    assert_eq!(last["reason"], "resumed after restart (deep)");
     assert!(
         last["visited"].as_i64().unwrap() < 300 * 201,
         "resume rescanned everything: {last}"

@@ -37,6 +37,7 @@ impl Index {
             id: root,
             seen: self.next_seen(),
             place: walk::Place::Regular,
+            only: None,
         };
         self.queue_push(&job)?;
         self.drain(vec![job])
@@ -75,6 +76,7 @@ impl Index {
             id,
             seen,
             place: inherited,
+            trusted,
             complete,
             children,
             read_failed,
@@ -89,7 +91,7 @@ impl Index {
         for e in entry_failed {
             self.error(&path, &e);
         }
-        let mut known = self.children_of(id)?;
+        let mut known = self.children_of(id, trusted)?;
         for (name, e) in stat_failed {
             // Preserve old information on permission/race errors; never infer deletion.
             known.remove(name.as_bytes());
@@ -97,9 +99,11 @@ impl Index {
         }
         for (name, m) in children {
             let child = path.join(&name);
+            let mut unchanged = false;
             let node = match known.remove(name.as_bytes()) {
                 Some(k) if k.matches(&m) => {
                     self.visited += 1;
+                    unchanged = true;
                     if m.is_dir() {
                         self.parents.insert(k.id, id);
                     }
@@ -122,6 +126,16 @@ impl Index {
                 id: node,
                 seen: self.next_seen(),
                 place,
+                // Same mtime and ctime: no entry was added, removed or renamed
+                // here (mlocate's rule). In-place file growth arrives as events.
+                only: if self.incremental
+                    && unchanged
+                    && m.mtime().max(m.ctime()) < self.trust_before
+                {
+                    Some(self.subdir_names(node)?)
+                } else {
+                    None
+                },
             };
             self.queue_push(&job)?;
             pool.dispatch(job);

@@ -26,6 +26,11 @@ pub fn open(path: &Path, write: bool) -> Result<Connection> {
     c.execute_batch("PRAGMA cache_size=-32768; PRAGMA temp_store=MEMORY;")?;
     c.set_prepared_statement_cache_capacity(64);
     if write {
+        // The writer's hot set is the upper levels of ten B-trees over 17M+
+        // rows. A 64 MiB private cache keeps them resident; mmap was tried and
+        // thrashed under the service's 1 GiB MemoryHigh (mapped pages are
+        // evicted with all other file pages), cutting scan speed ~100x.
+        c.execute_batch("PRAGMA cache_size=-65536")?;
         c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=16384; PRAGMA journal_size_limit=134217728;
         CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS nodes(

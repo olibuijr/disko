@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::Mutex;
 
-pub(super) struct EventQueue(Arc<Mutex<HashMap<PathBuf, bool>>>);
+pub(super) struct EventQueue(Arc<Mutex<events::Pending>>);
 impl EventQueue {
     pub fn start(
         rx: mpsc::Receiver<notify::Result<Event>>,
@@ -10,7 +10,7 @@ impl EventQueue {
         overflow: Arc<AtomicBool>,
         stop: Arc<AtomicBool>,
     ) -> Self {
-        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let pending = Arc::new(Mutex::new(events::Pending::default()));
         let output = pending.clone();
         std::thread::spawn(move || {
             while !stop.load(Ordering::Relaxed) {
@@ -27,7 +27,7 @@ impl EventQueue {
         });
         Self(pending)
     }
-    pub fn take(&self) -> HashMap<PathBuf, bool> {
+    pub fn take(&self) -> events::Pending {
         std::mem::take(&mut *self.0.lock().unwrap())
     }
 }

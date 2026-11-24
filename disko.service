@@ -15,12 +15,15 @@ StateDirectory=disko
 StateDirectoryMode=0750
 Group=@READER_GROUP@
 UMask=0027
-# A background indexer: yield CPU and disk to every other process.
+# A background indexer: yield CPU and disk to every other process. The idle
+# classes can starve a service indefinitely while anything else uses the disk,
+# so use the lowest best-effort priority and a high nice value instead.
 Nice=19
-CPUSchedulingPolicy=idle
-CPUWeight=idle
-IOSchedulingClass=idle
-IOWeight=1
+CPUSchedulingPolicy=batch
+CPUWeight=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+IOWeight=10
 OOMScoreAdjust=1000
 MemoryHigh=1G
 MemoryMax=2G

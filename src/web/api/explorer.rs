@@ -1,4 +1,5 @@
 use super::*;
+use crate::queries::live_ids;
 pub(super) fn query(
     c: &Connection,
     route: &str,
@@ -59,11 +60,14 @@ pub(super) fn query(
                 .and_then(|v| v.parse::<i64>().ok())
                 .unwrap_or(1);
             let ids = if id == 1 {
-                c.prepare(&format!(
-                    "SELECT id FROM nodes WHERE kind={kind} AND id!=1 ORDER BY {col} DESC LIMIT ?1"
-                ))?
-                .query_map([limit], |r| r.get::<_, i64>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()?
+                live_ids(
+                    c,
+                    &format!(
+                        "SELECT id FROM nodes WHERE kind={kind} AND id!=1 ORDER BY {col} DESC"
+                    ),
+                    [],
+                    limit as usize,
+                )?
             } else {
                 largest_under(c, id, kind, limit as usize, apparent)?
             };
@@ -81,10 +85,12 @@ pub(super) fn query(
             let lo = text.as_bytes();
             let mut hi = lo.to_vec();
             *hi.last_mut().unwrap() += 1;
-            let ids = c
-                .prepare("SELECT id FROM nodes WHERE name>=?1 AND name<?2 ORDER BY name LIMIT ?3")?
-                .query_map(params![lo, hi, limit], |r| r.get::<_, i64>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()?;
+            let ids = live_ids(
+                c,
+                "SELECT id FROM nodes WHERE name>=?1 AND name<?2 ORDER BY name",
+                params![lo, hi],
+                limit as usize,
+            )?;
             json!(
                 ids.iter()
                     .map(|id| node(c, *id))

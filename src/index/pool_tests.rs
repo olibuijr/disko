@@ -14,6 +14,7 @@ fn job(path: &Path) -> walk::Job {
         path: path.to_owned(),
         id: 1,
         seen: 1,
+        only: None,
         place: walk::Place::Regular,
     }
 }

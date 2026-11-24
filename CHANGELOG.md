@@ -2,6 +2,43 @@
 
 All notable changes to Disko are recorded here. Versions follow Semantic Versioning.
 
+## [0.4.0] - 2026-11-24
+
+### Fixed
+
+- The daemon could stop applying changes for days and ignore SIGTERM. Removing
+  a folder deleted its whole subtree in one SQL statement; with nine indexes
+  per row and the service's I/O limits that ran at tens of rows per second, so
+  one large deletion or rename held the writer in a single transaction with no
+  commits, heartbeats or stop checks. Removal now detaches the subtree in one
+  row update (totals adjust at once, readers stop seeing it) and deletes its
+  rows in committed batches of 2,048 while the daemon is otherwise idle.
+- A watchdog exits the daemon after 15 minutes without progress, logging what
+  it was doing, so systemd restarts it and the scan resumes; after SIGTERM it
+  forces an exit within 20 s.
+
+### Added
+
+- Incremental scans: a folder whose mtime and ctime match the index is not
+  reread; only its known subfolders are checked (the mlocate/updatedb rule).
+  Folders changed at or after the previous scan's start are always reread,
+  since timestamps are stored in whole seconds. Scheduled scans are
+  incremental; a deep scan that stats every entry runs weekly
+  (`--deep-secs`), after lost events, on a dashboard request, and when the
+  index has none. `disko scan --incremental` runs one by hand.
+- Renames reported by fanotify `FAN_RENAME` (Linux 5.17+) move the entry and
+  its subtree with one row update instead of deleting and rescanning it.
+  Older kernels and inotify keep the previous behaviour.
+
+### Changed
+
+- Walkers stat entries relative to the open directory instead of by path.
+- The writer's SQLite page cache is 64 MiB, and its folder-parent cache is
+  capped at 262,144 entries, so memory stays flat during scans.
+- The scan log line reports that scan's own counts and its mode.
+- The service uses best-effort I/O priority 7 and batch CPU scheduling instead
+  of the idle classes, which can starve a service indefinitely on a busy disk.
+
 ## [0.3.0] - 2026-10-17
 
 ### Added

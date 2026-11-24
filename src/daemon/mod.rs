@@ -22,24 +22,32 @@ use std::{
     },
     time::{Duration, Instant},
 };
+mod batch;
 mod config;
 mod events;
 mod fanotify;
 mod queue;
 mod remount;
+mod scan_mode;
+mod watchdog;
 use events::ignored_event;
 use remount::{MIN_FREE_BYTES, activity, low_space, remount};
 
 pub struct WatchOptions {
     pub interval: u64,
+    /// Seconds between deep scans; the scheduled scans in between are incremental.
+    pub deep_interval: u64,
     pub debounce: u64,
     pub web: Option<web::Options>,
 }
 
-pub fn writer(cli: &Cli, s: &ScanArgs, watch: Option<WatchOptions>) -> Result<()> {
+pub fn writer(cli: &Cli, s: &ScanArgs, watch: Option<WatchOptions>, deep: bool) -> Result<()> {
     let (mut idx, _lock, db) = config::prepare(cli, s)?;
     let daemon = watch.is_some();
-    let result = run(&mut idx, db, watch);
+    if daemon {
+        watchdog::start(idx.stop.clone());
+    }
+    let result = run(&mut idx, db, watch, deep);
     // SIGTERM/SIGINT abort a running scan through an error. For the daemon that
     // is an orderly stop (completed batches are committed when `idx` drops), so
     // systemd should not record it as a failure. One-shot `scan` still fails.
@@ -54,7 +62,7 @@ pub fn writer(cli: &Cli, s: &ScanArgs, watch: Option<WatchOptions>) -> Result<()
     }
 }
 
-fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> {
+fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>, deep: bool) -> Result<()> {
     let stop = idx.stop.clone();
     let rescan = Arc::new(AtomicBool::new(false));
     if let Some(options) = watch.as_ref().and_then(|w| w.web.as_ref()) {
@@ -109,11 +117,15 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
     );
     let Some(options) = watch else {
         set_meta(&idx.c, "recovery_reason", "one-shot scan")?;
-        idx.reconcile()?;
+        idx.reconcile(deep)?;
+        while idx.collect_garbage(GC_ROWS)? {
+            idx.commit()?;
+        }
         set_meta(&idx.c, "pid", 0)?;
         return Ok(());
     };
     let (interval, debounce) = (options.interval, options.debounce);
+    let mut deep_due = scan_mode::deep_due(idx, options.deep_interval)?;
     let mut last_scan = Instant::now();
     let mut last_health = Instant::now();
     let mut last_mounts = Instant::now();
@@ -122,9 +134,16 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
     let mut started = false;
     while !stop.load(Ordering::Relaxed) {
         let requested = rescan.swap(false, Ordering::Relaxed);
-        due |= requested
-            || overflow.swap(false, Ordering::Relaxed)
-            || (interval > 0 && last_scan.elapsed() >= Duration::from_secs(interval));
+        let lost = overflow.swap(false, Ordering::Relaxed);
+        // Lost events or a manual request: anything may have changed, so
+        // stat everything. A schedule tick is incremental unless a deep scan
+        // is due.
+        deep_due |= requested || lost;
+        if interval > 0 && last_scan.elapsed() >= Duration::from_secs(interval) {
+            due = true;
+            deep_due |= scan_mode::deep_due(idx, options.deep_interval)?;
+        }
+        due |= requested || lost;
         if due && low_space(&db) {
             if !waiting {
                 eprintln!(
@@ -147,7 +166,8 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
             started = true;
             waiting = false;
             due = false;
-            idx.reconcile()?;
+            idx.reconcile(deep_due)?;
+            deep_due = false;
             last_scan = Instant::now();
         }
         std::thread::sleep(Duration::from_millis(debounce.clamp(10, 2000)));
@@ -159,28 +179,11 @@ fn run(idx: &mut Index, db: PathBuf, watch: Option<WatchOptions>) -> Result<()> 
                 table = current;
             }
         }
-        let mut pending = queue.take();
-        if !pending.is_empty() {
-            let mut paths: Vec<_> = pending.drain().collect();
-            paths.sort_by(|a, b| a.0.cmp(&b.0));
-            let mut recursive_parent: Option<PathBuf> = None;
-            for (path, recursive) in paths {
-                if recursive_parent
-                    .as_ref()
-                    .is_some_and(|p| path.starts_with(p))
-                {
-                    continue;
-                }
-                idx.sync(&path, recursive)?;
-                idx.update_hardlinks(&path)?;
-                activity(idx, &path, if recursive { "subtree" } else { "metadata" })?;
-                if recursive {
-                    recursive_parent = Some(path);
-                }
-            }
-            set_meta(&idx.c, "last_event", now())?;
-            idx.c.execute("DELETE FROM activity WHERE id NOT IN (SELECT id FROM activity ORDER BY id DESC LIMIT 2000)",[])?;
-            idx.commit()?;
+        let pending = queue.take();
+        let idle = pending.paths.is_empty() && pending.renames.is_empty();
+        batch::apply(idx, pending)?;
+        if idle && !due {
+            batch::collect_garbage(idx, &stop, Duration::from_millis(500))?;
         }
         if last_health.elapsed() > Duration::from_secs(10) {
             if !due {

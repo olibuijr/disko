@@ -1,10 +1,18 @@
 use super::*;
+use notify::event::RenameMode;
+
+/// Changes waiting for the writer: coalesced paths, plus renames in order.
+#[derive(Default)]
+pub(super) struct Pending {
+    pub paths: HashMap<PathBuf, bool>,
+    pub renames: Vec<(PathBuf, PathBuf)>,
+}
 
 pub(super) fn collect(
     event: notify::Result<Event>,
     roots: &[PathBuf],
     excludes: &[PathBuf],
-    pending: &mut HashMap<PathBuf, bool>,
+    pending: &mut Pending,
     overflow: &AtomicBool,
 ) {
     match event {
@@ -15,6 +23,20 @@ pub(super) fn collect(
             if ignored_event(&e.kind) {
                 return;
             }
+            let wanted = |p: &Path| {
+                roots.iter().any(|r| p.starts_with(r))
+                    && !excludes.iter().any(|r| p.starts_with(r))
+                    && !p.components().any(|c| c.as_os_str() == ".snapshots")
+            };
+            if let (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [old, new]) =
+                (&e.kind, e.paths.as_slice())
+                && wanted(old)
+                && wanted(new)
+                && pending.renames.len() < PENDING_LIMIT
+            {
+                pending.renames.push((old.clone(), new.clone()));
+                return;
+            }
             let recursive = matches!(
                 e.kind,
                 EventKind::Create(_)
@@ -23,11 +45,8 @@ pub(super) fn collect(
                     | EventKind::Other
             );
             for p in e.paths {
-                if roots.iter().any(|r| p.starts_with(r))
-                    && !excludes.iter().any(|r| p.starts_with(r))
-                    && !p.components().any(|c| c.as_os_str() == ".snapshots")
-                {
-                    add(pending, p, recursive, roots, PENDING_LIMIT);
+                if wanted(&p) {
+                    add(&mut pending.paths, p, recursive, roots, PENDING_LIMIT);
                 }
             }
         }

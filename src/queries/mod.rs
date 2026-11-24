@@ -21,6 +21,7 @@ pub use disks::filesystems;
 pub use insights::{cleanup, growth};
 pub use largest::largest_under;
 pub use metadata::{node, required};
+pub use output::live_ids;
 use output::{print_rows, rows};
 pub use status::status_value;
 
@@ -38,8 +39,9 @@ pub fn run(cli: &Cli) -> Result<()> {
             let col = if *apparent { "bytes" } else { "blocks" };
             rows(
                 &c,
-                &format!("SELECT id FROM nodes WHERE parent=?1 ORDER BY {col} DESC LIMIT ?2"),
-                params![id, *limit as i64],
+                &format!("SELECT id FROM nodes WHERE parent=?1 ORDER BY {col} DESC"),
+                params![id],
+                *limit,
                 *apparent,
                 cli.json,
             )
@@ -58,9 +60,10 @@ pub fn run(cli: &Cli) -> Result<()> {
                 rows(
                     &c,
                     &format!(
-                        "SELECT id FROM nodes WHERE kind={kind_num} AND id!=1 ORDER BY {col} DESC LIMIT ?1"
+                        "SELECT id FROM nodes WHERE kind={kind_num} AND id!=1 ORDER BY {col} DESC"
                     ),
-                    [*limit as i64],
+                    [],
+                    *limit,
                     *apparent,
                     cli.json,
                 )
@@ -84,8 +87,9 @@ pub fn run(cli: &Cli) -> Result<()> {
             if *contains {
                 rows(
                     &c,
-                    "SELECT id FROM nodes WHERE instr(CAST(name AS TEXT),?1)>0 LIMIT ?2",
-                    params![text, *limit as i64],
+                    "SELECT id FROM nodes WHERE instr(CAST(name AS TEXT),?1)>0",
+                    params![text],
+                    *limit,
                     false,
                     cli.json,
                 )
@@ -98,8 +102,9 @@ pub fn run(cli: &Cli) -> Result<()> {
                 *hi.last_mut().unwrap() += 1;
                 rows(
                     &c,
-                    "SELECT id FROM nodes WHERE name>=?1 AND name<?2 ORDER BY name LIMIT ?3",
-                    params![lo, hi, *limit as i64],
+                    "SELECT id FROM nodes WHERE name>=?1 AND name<?2 ORDER BY name",
+                    params![lo, hi],
+                    *limit,
                     false,
                     cli.json,
                 )

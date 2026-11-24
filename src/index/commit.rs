@@ -5,9 +5,17 @@ use super::*;
 /// dashboard calls a heartbeat late after 45s, so stay well under that.
 const COMMIT_ROWS: usize = 32768;
 const COMMIT_EVERY: Duration = Duration::from_secs(15);
+/// Cached folder -> parent links (about 4 MiB at this size).
+const PARENTS_MAX: usize = 1 << 18;
 
 impl Index {
     pub(super) fn ancestors(&mut self, mut id: i64, d: Delta) -> Result<()> {
+        // A cache, not a mirror of the tree: past this size it is rebuilt from
+        // lookups, so memory stays flat however many folders a scan visits.
+        if self.parents.len() > PARENTS_MAX {
+            self.parents.clear();
+            self.parents.shrink_to(PARENTS_MAX / 4);
+        }
         while id > 0 {
             self.deltas.entry(id).or_default().add(d);
             id = match self.parents.get(&id) {
@@ -52,6 +60,7 @@ impl Index {
             },
         )?;
         set_meta(&self.c, "heartbeat", now())?;
+        progress();
         set_meta(&self.c, "scan_path", self.current_path.to_string_lossy())?;
         if now() - self.last_sample >= 30 {
             self.c.execute("INSERT OR REPLACE INTO samples SELECT ?1,entries,files,bytes,blocks,?2,?3,coalesce((SELECT value FROM meta WHERE key='state'),'idle') FROM nodes WHERE id=1",params![now(),self.visited as i64,(self.watched.len()+self.filesystem_devices.len()) as i64])?;

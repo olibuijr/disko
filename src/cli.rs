@@ -19,13 +19,23 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Command {
     /// Build/reconcile the index once. Metadata only; never reads file contents.
-    Scan(ScanArgs),
+    Scan {
+        #[command(flatten)]
+        scan: ScanArgs,
+        /// Reread only folders whose mtime or ctime changed since they were indexed.
+        #[arg(long)]
+        incremental: bool,
+    },
     /// Reconcile on startup, then maintain the index from Linux inotify events.
     Watch {
         #[command(flatten)]
         scan: ScanArgs,
+        /// Seconds between scheduled scans (incremental unless a deep scan is due).
         #[arg(long, default_value_t = 86400)]
         reconcile_secs: u64,
+        /// Seconds between deep scans that stat every entry; 0 makes every scan deep.
+        #[arg(long, default_value_t = 604800)]
+        deep_secs: u64,
         #[arg(long, default_value_t = 250)]
         debounce_ms: u64,
         /// Dashboard listener. Authentication is required on every interface.

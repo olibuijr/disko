@@ -1,16 +1,37 @@
 use super::*;
 
+/// The first `limit` IDs from `sql` that are still in the tree. Removed
+/// subtrees stay in the table until garbage collection deletes them in batches,
+/// so global queries skip them here; `sql` must not apply the limit itself.
+pub fn live_ids<P: rusqlite::Params>(
+    c: &Connection,
+    sql: &str,
+    p: P,
+    limit: usize,
+) -> Result<Vec<i64>> {
+    let mut stmt = c.prepare(sql)?;
+    let mut rows = stmt.query(p)?;
+    let mut ids = Vec::new();
+    while ids.len() < limit
+        && let Some(r) = rows.next()?
+    {
+        let id: i64 = r.get(0)?;
+        if is_live(c, id)? {
+            ids.push(id);
+        }
+    }
+    Ok(ids)
+}
+
 pub fn rows<P: rusqlite::Params>(
     c: &Connection,
     sql: &str,
     p: P,
+    limit: usize,
     apparent: bool,
     json: bool,
 ) -> Result<()> {
-    let ids = c
-        .prepare(sql)?
-        .query_map(p, |r| r.get::<_, i64>(0))?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let ids = live_ids(c, sql, p, limit)?;
     print_rows(c, &ids, apparent, json)
 }
 pub fn print_rows(c: &Connection, ids: &[i64], apparent: bool, json_output: bool) -> Result<()> {

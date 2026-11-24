@@ -9,7 +9,9 @@ Global options: `--db PATH` (or `DISKO_DB`) and `--json`.
 | `watch --no-web` | Index and watch without HTTP |
 | `watch --listen ADDRESS:PORT` | Choose dashboard listener; default `0.0.0.0:7331` |
 | `watch --password-file PATH` | Choose a password hash file |
-| `watch --reconcile-secs N` | Periodic reconciliation; default 86400 (daily), zero disables |
+| `watch --reconcile-secs N` | Periodic scan; default 86400 (daily), zero disables |
+| `watch --deep-secs N` | Deep scan interval; default 604800 (weekly); other scans are incremental; zero makes every scan deep |
+| `scan --incremental` | Reread only folders whose mtime or ctime changed |
 | `watch --debounce-ms N` | Event coalescing window; default 250, maximum 2000 |
 | `serve [--listen ADDRESS:PORT]` | Read-only dashboard; default `127.0.0.1:7331` |
 | `password [--password-file PATH]` | Hash a password read from stdin |
@@ -62,7 +64,7 @@ JSON request bodies are limited to 4 KiB. The UI is the reference client.
 | `GET /api/find?q=PREFIX&limit=100` | Filename-prefix matches |
 | `GET /api/history` | Scan history and rate samples |
 | `GET /api/activity` | Recent coalesced updates |
-| `POST /api/rescan` | Queue reconciliation |
+| `POST /api/rescan` | Queue a deep scan |
 | `POST /api/delete/preview` with `{"id":ID}` | Check eligibility and issue a preview token |
 | `POST /api/delete` with `{"token":"..."}` | Delete the previewed entry |
 | `POST /api/logout` | Invalidate the session |

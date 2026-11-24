@@ -80,16 +80,7 @@ pub(super) fn whole_btrfs(fd: i32, source: &str) -> Result<File> {
         bail!("open top-level subvolume: {}", io::Error::last_os_error());
     }
     let root = unsafe { File::from_raw_fd(root) };
-    if unsafe {
-        libc::fanotify_mark(
-            fd,
-            libc::FAN_MARK_ADD | libc::FAN_MARK_FILESYSTEM,
-            super::mounts::MASK,
-            root.as_raw_fd(),
-            c".".as_ptr(),
-        )
-    } != 0
-    {
+    if super::mounts::add_mark(fd, root.as_raw_fd(), c".") != 0 {
         bail!("fanotify_mark: {}", io::Error::last_os_error());
     }
     Ok(root)

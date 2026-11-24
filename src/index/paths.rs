@@ -36,6 +36,19 @@ pub fn resolve(c: &Connection, p: &Path) -> Result<Option<i64>> {
     Ok(Some(id))
 }
 
+/// True when the entry is reachable from the root, i.e. not in a removed
+/// subtree that is still waiting for garbage collection.
+pub fn is_live(c: &Connection, mut id: i64) -> Result<bool> {
+    while id > 1 {
+        id = c
+            .prepare_cached("SELECT parent FROM nodes WHERE id=?1")?
+            .query_row([id], |r| r.get(0))
+            .optional()?
+            .unwrap_or(-1);
+    }
+    Ok(id == 1)
+}
+
 pub fn path_of(c: &Connection, mut id: i64) -> Result<PathBuf> {
     let mut parts = Vec::new();
     while id > 1 {
@@ -44,6 +57,9 @@ pub fn path_of(c: &Connection, mut id: i64) -> Result<PathBuf> {
             .query_row([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
         parts.push(OsString::from_vec(name));
         id = parent;
+    }
+    if id < 0 {
+        bail!("entry was removed from the index");
     }
     let mut p = PathBuf::from("/");
     for part in parts.into_iter().rev() {

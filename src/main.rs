@@ -20,10 +20,11 @@ fn main() {
 fn run() -> Result<()> {
     let cli = Cli::parse();
     match &cli.command {
-        Command::Scan(s) => daemon::writer(&cli, s, None),
+        Command::Scan { scan, incremental } => daemon::writer(&cli, scan, None, !incremental),
         Command::Watch {
             scan,
             reconcile_secs,
+            deep_secs,
             debounce_ms,
             listen,
             no_web,
@@ -33,6 +34,7 @@ fn run() -> Result<()> {
             scan,
             Some(daemon::WatchOptions {
                 interval: *reconcile_secs,
+                deep_interval: *deep_secs,
                 debounce: *debounce_ms,
                 web: if *no_web {
                     None
@@ -43,6 +45,7 @@ fn run() -> Result<()> {
                     })
                 },
             }),
+            true,
         ),
         Command::Serve {
             listen,

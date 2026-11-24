@@ -53,6 +53,9 @@ pub fn cleanup(c: &Connection, limit: usize, min_bytes: i64) -> Result<Vec<Value
         if kept.len() >= limit {
             break;
         }
+        if !is_live(c, id)? {
+            continue; // Removed, awaiting garbage collection.
+        }
         let path = path_of(c, id)?;
         if kept.iter().any(|(p, _)| path.starts_with(p)) {
             continue;
@@ -87,7 +90,9 @@ pub fn growth(c: &Connection, days: i64, limit: usize) -> Result<Value> {
         Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?))
     })? {
         let (id, delta) = row?;
-        grew.push((path_of(c, id)?, id, delta));
+        if is_live(c, id)? {
+            grew.push((path_of(c, id)?, id, delta));
+        }
     }
     // Skip a folder when one of its subfolders accounts for most of its growth.
     let explained = |p: &Path, delta: i64| {

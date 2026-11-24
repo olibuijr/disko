@@ -82,21 +82,16 @@ impl Index {
             if id == 1 {
                 bail!("refusing to remove the index root");
             }
+            if parent < 0 {
+                return Ok(()); // Already detached.
+            }
             if kind == 1 && !self.watched.is_empty() {
                 let path = path_of(&self.c, id)?;
                 self.forget_watches(&path);
             }
-            if kind == 1 {
-                // Drop exactly the cached parents of removed directories; row IDs
-                // can be reused, so stale entries would misroute later deltas.
-                let dirs = self.c.prepare_cached("WITH RECURSIVE subtree(id,kind) AS (SELECT id,kind FROM nodes WHERE id=?1 UNION ALL SELECT n.id,n.kind FROM nodes n JOIN subtree s ON n.parent=s.id WHERE s.kind=1) SELECT id FROM subtree WHERE kind=1")?.query_map([id], |r| r.get::<_, i64>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
-                for dir in dirs {
-                    self.parents.remove(&dir);
-                }
-            }
-            self.c.prepare_cached("WITH RECURSIVE subtree(id) AS (SELECT ?1 UNION ALL SELECT n.id FROM nodes n JOIN subtree s ON n.parent=s.id) DELETE FROM nodes WHERE id IN (SELECT id FROM subtree)")?.execute([id])?;
-            self.ancestors(parent, d)?;
-            self.dirty += 1;
+            // Constant time however large the subtree: rows are deleted later in
+            // small committed batches (see gc.rs).
+            self.detach(id, parent, d)?;
         }
         Ok(())
     }
@@ -161,7 +156,9 @@ impl Index {
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         for id in ids {
-            let path = path_of(&self.c, id)?;
+            let Ok(path) = path_of(&self.c, id) else {
+                continue; // Detached, awaiting collection.
+            };
             if path != p {
                 self.ensure(&path)?;
             }

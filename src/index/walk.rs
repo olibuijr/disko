@@ -45,6 +45,9 @@ pub(super) struct Job {
     pub(super) id: i64,
     pub(super) seen: i64,
     pub(super) place: Place,
+    /// Incremental scans: the folder is unchanged since it was indexed, so only
+    /// these known subfolders are checked instead of rereading every entry.
+    pub(super) only: Option<Vec<OsString>>,
 }
 
 /// One enumerated directory. The writer replays children and failures; sibling
@@ -54,6 +57,8 @@ pub(super) struct DirResult {
     pub(super) id: i64,
     pub(super) seen: i64,
     pub(super) place: Place,
+    /// Built from `Job::only`: children are the known subfolders only.
+    pub(super) trusted: bool,
     pub(super) complete: bool,
     pub(super) children: Vec<(OsString, fs::Metadata)>,
     pub(super) read_failed: Option<std::io::Error>,
@@ -76,6 +81,7 @@ pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResu
         id: job.id,
         seen: job.seen,
         place: job.place,
+        trusted: job.only.is_some(),
         complete: true,
         children: Vec::new(),
         read_failed: None,
@@ -86,6 +92,19 @@ pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResu
         r.complete = false;
         return r;
     }
+    if let Some(names) = &job.only {
+        // Unchanged folder: its entries are as indexed; only subfolders can
+        // differ, below. Never treated as complete, so nothing is pruned.
+        r.complete = false;
+        for name in names {
+            match fs::symlink_metadata(job.path.join(name)) {
+                Ok(m) => r.children.push((name.clone(), m)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => r.stat_failed.push((name.clone(), e)),
+            }
+        }
+        return r;
+    }
     let rd = match fs::read_dir(&job.path) {
         Ok(rd) => rd,
         Err(e) => {
@@ -94,10 +113,13 @@ pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResu
             return r;
         }
     };
-    for entry in rd {
+    for (n, entry) in rd.enumerate() {
         if stop.load(Ordering::Relaxed) {
             r.complete = false;
             return r;
+        }
+        if n % 4096 == 4095 {
+            crate::index::progress(); // A huge folder is slow, not stuck.
         }
         match entry {
             Ok(entry) => {
@@ -105,7 +127,8 @@ pub(super) fn walk_dir(stop: &AtomicBool, filter: &Filter, job: &Job) -> DirResu
                 if filter.excluded(&child) {
                     continue;
                 }
-                match fs::symlink_metadata(&child) {
+                // fstatat relative to the open directory: no path walk per entry.
+                match entry.metadata() {
                     Ok(m) => r.children.push((entry.file_name(), m)),
                     Err(e) => r.stat_failed.push((entry.file_name(), e)),
                 }

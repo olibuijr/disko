@@ -17,6 +17,28 @@ pub(super) const MASK: u64 = libc::FAN_MODIFY
     | libc::FAN_MOVED_FROM
     | libc::FAN_MOVED_TO
     | libc::FAN_ONDIR;
+/// Linux 5.17+: one event carrying both names of a rename, so a moved folder is
+/// one row update instead of a delete plus a rescan of everything below it.
+pub(super) const FAN_RENAME: u64 = 0x1000_0000;
+const MASK_RENAME: u64 = (MASK & !(libc::FAN_MOVED_FROM | libc::FAN_MOVED_TO)) | FAN_RENAME;
+
+/// Add a filesystem mark, preferring `FAN_RENAME` and falling back on older kernels.
+pub(super) fn add_mark(fd: i32, dirfd: i32, name: &std::ffi::CStr) -> i32 {
+    let mark = |mask| unsafe {
+        libc::fanotify_mark(
+            fd,
+            libc::FAN_MARK_ADD | libc::FAN_MARK_FILESYSTEM,
+            mask,
+            dirfd,
+            name.as_ptr(),
+        )
+    };
+    let r = mark(MASK_RENAME);
+    if r != 0 && io::Error::last_os_error().raw_os_error() == Some(libc::EINVAL) {
+        return mark(MASK);
+    }
+    r
+}
 
 /// How event file handles of one marked filesystem are decoded.
 pub(super) enum Source {
@@ -130,16 +152,7 @@ fn mark(fd: i32, path: &Path, m: &Mount) -> Result<Option<Marked>> {
         return Ok(None);
     }
     let name = CString::new(path.as_os_str().as_bytes())?;
-    if unsafe {
-        libc::fanotify_mark(
-            fd,
-            libc::FAN_MARK_ADD | libc::FAN_MARK_FILESYSTEM,
-            MASK,
-            libc::AT_FDCWD,
-            name.as_ptr(),
-        )
-    } == 0
-    {
+    if add_mark(fd, libc::AT_FDCWD, &name) == 0 {
         let Some(fsid) = super::btrfs::fsid(&file) else {
             return Ok(None);
         };

@@ -8,7 +8,10 @@ impl Index {
         if self.resumable {
             self.c
                 .prepare_cached("INSERT OR REPLACE INTO scan_queue VALUES(?1,?2)")?
-                .execute(params![job.id, job.place.code()])?;
+                .execute(params![
+                    job.id,
+                    job.place.code() | if job.only.is_some() { 4 } else { 0 }
+                ])?;
         }
         Ok(())
     }
@@ -33,11 +36,17 @@ impl Index {
         for (id, place) in rows {
             match path_of(&self.c, id) {
                 Ok(path) if self.relevant(&path) && !self.skip.contains(&path) => {
+                    let only = if place & 4 != 0 {
+                        Some(self.subdir_names(id)?)
+                    } else {
+                        None
+                    };
                     jobs.push(walk::Job {
                         path,
                         id,
                         seen: self.next_seen(),
-                        place: walk::Place::from_code(place),
+                        place: walk::Place::from_code(place & 3),
+                        only,
                     });
                 }
                 _ => {
@@ -75,7 +84,10 @@ impl Index {
         Ok(())
     }
 
-    pub fn reconcile(&mut self) -> Result<()> {
+    /// A deep scan rereads every folder and stats every entry. An incremental
+    /// scan rereads only folders whose mtime or ctime changed, relying on live
+    /// events for files that changed in place.
+    pub fn reconcile(&mut self, deep: bool) -> Result<()> {
         let start_visited = self.visited;
         let start_errors = self.errors;
         let start_watch_errors = self.watch_errors;
@@ -92,10 +104,17 @@ impl Index {
             "resumed after restart".into()
         };
         set_meta(&self.c, "recovery_reason", &reason)?;
+        let mode = if deep { "deep" } else { "incremental" };
         self.c.execute(
             "INSERT INTO scans(started,reason,state) VALUES(?1,?2,'scanning')",
-            params![now(), reason],
+            params![now(), format!("{reason} ({mode})")],
         )?;
+        set_meta(&self.c, "scan_mode", mode)?;
+        phase(if deep {
+            "deep scan"
+        } else {
+            "incremental scan"
+        });
         let scan_id = self.c.last_insert_rowid();
         set_meta(&self.c, "scan_started", now())?;
         set_meta(&self.c, "scan_start_visited", start_visited)?;
@@ -103,10 +122,20 @@ impl Index {
         self.commit()?;
         let start_time = Instant::now();
         self.resumable = true;
+        self.incremental = !deep;
+        self.trust_before = self.c.query_row(
+            "SELECT coalesce(max(started),0) FROM scans WHERE state='complete'",
+            [],
+            |r| r.get(0),
+        )?;
         let walked = self.walk_roots(pending);
         self.resumable = false;
+        self.incremental = false;
         walked?;
         set_meta(&self.c, "last_scan", now())?;
+        if deep {
+            set_meta(&self.c, "last_deep_scan", now())?;
+        }
         self.c.execute("UPDATE scans SET finished=?2,visited=?3,errors=?4,watch_errors=?5,state='complete' WHERE id=?1",params![scan_id,now(),(self.visited-start_visited) as i64,(self.errors-start_errors) as i64,(self.watch_errors-start_watch_errors) as i64])?;
         self.c.execute(
             "DELETE FROM scans WHERE id NOT IN (SELECT id FROM scans ORDER BY id DESC LIMIT 100)",
@@ -128,12 +157,13 @@ impl Index {
         )?;
         self.checkpoint()?;
         eprintln!(
-            "indexed {} entries in {:.2}s; {} metadata errors, {} watch errors",
-            self.visited,
+            "{mode} scan checked {} entries in {:.0}s; {} metadata errors, {} watch errors",
+            self.visited - start_visited,
             start_time.elapsed().as_secs_f64(),
-            self.errors,
-            self.watch_errors
+            self.errors - start_errors,
+            self.watch_errors - start_watch_errors
         );
+        phase("watching");
         Ok(())
     }
 }

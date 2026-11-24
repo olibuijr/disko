@@ -48,11 +48,17 @@ impl Known {
 
 impl Index {
     /// Every indexed child of a directory, keyed by name.
-    pub(super) fn children_of(&self, parent: i64) -> Result<HashMap<Vec<u8>, Known>> {
+    pub(super) fn children_of(
+        &self,
+        parent: i64,
+        dirs_only: bool,
+    ) -> Result<HashMap<Vec<u8>, Known>> {
         let mut out = HashMap::new();
-        let mut stmt = self.c.prepare_cached(
-            "SELECT id,name,kind,size,allocated,mtime,ctime,dev,ino,links,mode,uid,gid FROM nodes WHERE parent=?1",
-        )?;
+        let mut stmt = self.c.prepare_cached(if dirs_only {
+            "SELECT id,name,kind,size,allocated,mtime,ctime,dev,ino,links,mode,uid,gid FROM nodes WHERE parent=?1 AND kind=1"
+        } else {
+            "SELECT id,name,kind,size,allocated,mtime,ctime,dev,ino,links,mode,uid,gid FROM nodes WHERE parent=?1"
+        })?;
         let mut rows = stmt.query([parent])?;
         while let Some(r) = rows.next()? {
             let mut fields = [0_i64; 11];
@@ -68,5 +74,18 @@ impl Index {
             );
         }
         Ok(out)
+    }
+
+    /// Names of a folder's indexed subfolders (the `child_blocks` index prefix,
+    /// so file rows are never read).
+    pub(super) fn subdir_names(&self, parent: i64) -> Result<Vec<OsString>> {
+        let mut stmt = self
+            .c
+            .prepare_cached("SELECT name FROM nodes WHERE parent=?1 AND kind=1")?;
+        let names = stmt
+            .query_map([parent], |r| r.get::<_, Vec<u8>>(0))?
+            .map(|n| n.map(OsString::from_vec))
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(names)
     }
 }
